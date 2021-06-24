@@ -46,6 +46,9 @@ class MBE(ErrorFunction):
 	def __call__(self, Y, predictions):
 		return np.sum(Y-predictions)/len(Y)
 
+	def grad(self, Y, predictions):
+		return -np.ones(Y.shape)
+
 class CrossEntropy(ErrorFunction):
 
 	def __init__(self):
@@ -65,7 +68,7 @@ class CategoricalCrossEntropy(ErrorFunction):
 	def __call__(self, Y, predictions):
 		return -np.sum(Y*np.log(predictions))
 
-	def grad(Y, predictions):
+	def grad(self, Y, predictions):
 		return -Y/predictions
 
 class KullbackLeiblerDivergence(ErrorFunction):
@@ -74,7 +77,10 @@ class KullbackLeiblerDivergence(ErrorFunction):
 		super().__init__('Kullback-Leibler divergence')
 
 	def __call__(self, Y, predictions):
-		return np.sum(predictions*np.log(predictions/Y))
+		return np.sum(Y*np.log(Y/predictions))
+
+	def grad(self, Y, predictions):
+		return -Y/predictions
 
 class Exponential(ErrorFunction):
 
@@ -83,8 +89,10 @@ class Exponential(ErrorFunction):
 		self.t = t
 
 	def __call__(self, Y, predictions):
-		return self.t*np.exp(np.sum((Y-predictions)**2)/t)
+		return self.t*np.exp(np.sum((Y-predictions)**2)/self.t)
 
+	def grad(self, Y, predictions):
+		return 2/self.t*self.__call__(Y, predictions)*(predictions-Y)
 
 class HellingerDistance(ErrorFunction):
 
@@ -94,3 +102,5 @@ class HellingerDistance(ErrorFunction):
 	def __call__(self, Y, predictions):
 		return np.sum((np.sqrt(Y)-np.sqrt(predictions))**2)/np.sqrt(2)
 
+	def grad(self, Y, predictions):
+		return (np.sqrt(predictions)-np.sqrt(Y))/(np.sqrt(2*predictions))
