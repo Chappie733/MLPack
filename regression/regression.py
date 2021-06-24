@@ -1,6 +1,7 @@
 import numpy as np
 from numbers import Number
-
+import h5py
+import os
 
 class Regressor:
 
@@ -18,7 +19,7 @@ class Regressor:
 	def predict(self, X):
 		return self.func(self.B(X))
 
-	def train(self, X, Y, epochs=50, verbose=False):
+	def fit(self, X, Y, epochs=50, verbose=True):
 		if not isinstance(Y, np.ndarray):
 			Y = np.array(Y)
 		if not isinstance(X, np.ndarray):
@@ -33,6 +34,21 @@ class Regressor:
 
 			self.weights = self.weights + dw
 			self.theta = self.theta + dt
+
+	def save(self, path, absolute=True):
+		folder = os.path.dirname(__file__)
+		absolute_path = path if absolute else os.path.join(folder, path)
+		file = h5py.File(absolute_path, 'w')
+		data = np.append(self.weights, [self.theta, self.lr])
+		file.create_dataset('data', data.shape, np.float32, data, compression="gzip")
+		file.close()
+
+	def load(self, path, absolute=False):
+		folder = os.path.dirname(__file__)
+		absolute_path = path if absolute else os.path.join(folder, path)
+		file = h5py.File(path, 'r')
+		self.weights, self.theta, self.lr = np.array(file['data'][:-2], dtype=np.float32), file['data'][-2], file['data'][-1]
+		file.close()
 
 class LinearRegressor(Regressor):
 
