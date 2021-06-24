@@ -1,7 +1,5 @@
 import numpy as np
 from networks.std.layer import Layer, ELU
-from networks.activations import sigmoid, ReLu
-from networks.errors import MSE
 
 class Model:
 
@@ -65,22 +63,3 @@ class Model:
 
 
 			print("Epoch #{epoch}: {H}".format(epoch=epoch, H=H))
-
-model = Model([
-	Layer(3),
-	Layer(15),
-	Layer(4)
-	])
-
-model.compile(MSE())
-
-X = np.array([1,5,-4])
-Y = np.array([1,2,3,4])
-
-print("Correct values: " + str(Y), end='\n'*2)
-print("Initial prediction: " + str(model._predict(X)))
-
-print("Training the model...")
-model.fit([X],[Y])
-
-print("Prediction after the training: " + str(model._predict(X)))
