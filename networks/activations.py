@@ -102,6 +102,5 @@ def softplus(x, deriv=False, *args):
 '''
 TO IMPLEMENT:
 softmax
-ELU
 
 '''
