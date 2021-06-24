@@ -17,15 +17,12 @@ class Layer:
 	def get_local_fields(self, bias):
 		return np.dot(self.weights, self.neurons)+bias
 
-	def get_activation(self, thresholds):
-		return self.g(self.get_local_fields(thresholds))
-
 	# feed a previous layer or an input
 	def feed(self, prev):
 		if not isinstance(prev, np.ndarray) and not isinstance(prev, Layer):
 			raise TypeError("Expected numpy array or layer object but received {type} instead".format(type=type(prev)))
 		if isinstance(prev, Layer):
-			self.neurons = prev.get_activation(self.thresholds)
+			self.neurons = self.g(prev.get_local_fields(self.thresholds))
 		elif isinstance(prev, np.ndarray):
 			self.neurons = prev
 

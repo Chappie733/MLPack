@@ -1,10 +1,11 @@
 import numpy as np
 from networks.std.layer import Layer, ELU
-from networks.activations import sigmoid
+from networks.activations import sigmoid, ReLu
+from networks.errors import MSE
 
 class Model:
 
-	def __init__(self, layers, lr=0.005):
+	def __init__(self, layers, lr=0.001):
 		self.L = len(layers)
 		self.lr = lr
 		self.layers = layers
@@ -50,10 +51,11 @@ class Model:
 				errors = [errors_L]
 
 				for l in range(self.L-1, 1, -1):
-					B_l = self.layers[l-1].get_local_fields(self.layers[l].thresholds)
+					B_l = self.layers[l-2].get_local_fields(self.layers[l-1].thresholds)
 					g_prime = self.layers[l-1].g(B_l, deriv=True)
 
 					error_l = np.dot(self.layers[l-1].weights.T, errors[-1])
+					errors.append(error_l*g_prime)
 
 				for l in range(1, self.L):
 					for j in range(self.layers[l].N):
@@ -63,3 +65,22 @@ class Model:
 
 
 			print("Epoch #{epoch}: {H}".format(epoch=epoch, H=H))
+
+model = Model([
+	Layer(3),
+	Layer(15),
+	Layer(4)
+	])
+
+model.compile(MSE())
+
+X = np.array([1,5,-4])
+Y = np.array([1,2,3,4])
+
+print("Correct values: " + str(Y), end='\n'*2)
+print("Initial prediction: " + str(model._predict(X)))
+
+print("Training the model...")
+model.fit([X],[Y])
+
+print("Prediction after the training: " + str(model._predict(X)))
