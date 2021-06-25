@@ -33,8 +33,6 @@ class Model:
 		return self.error_func(Y, predictions)
 
 	def fit(self, inputs, labels, epochs=75, verbose=True):
-		epochs_errors = []
-
 		for epoch in range(1, epochs+1):
 			if verbose:
 				H = 0
@@ -70,5 +68,3 @@ class Model:
 					self.layers[l].thresholds += updates[-self.layers[l].N:]
 
 			print("Error on epoch #{epoch}: {H}".format(epoch=epoch, H=H))
-			epochs_errors.append(H)
-		return epochs_errors
