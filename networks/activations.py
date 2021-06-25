@@ -1,4 +1,5 @@
 import numpy as np
+from numbers import Number
 
 #In the following functions args[0] is actually kwargs
 
@@ -102,5 +103,6 @@ def softplus(x, deriv=False, *args):
 '''
 TO IMPLEMENT:
 softmax
+ELU
 
 '''

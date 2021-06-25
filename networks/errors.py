@@ -44,10 +44,10 @@ class MBE(ErrorFunction):
 		super().__init__('Mean Bias Error')
 
 	def __call__(self, Y, predictions):
-		return np.sum(predictions-Y)/len(Y)
+		return np.sum(Y-predictions)/len(Y)
 
 	def grad(self, Y, predictions):
-		return np.ones(Y.shape)
+		return -np.ones(Y.shape)
 
 class CrossEntropy(ErrorFunction):
 
