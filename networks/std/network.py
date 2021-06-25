@@ -66,5 +66,5 @@ class Model:
 					updates = self.optimizer.step(gradients, layer=l-1)
 					self.layers[l-1].weights += np.reshape(updates[:-self.layers[l].N], (self.layers[l].N, self.layers[l-1].N))
 					self.layers[l].thresholds += updates[-self.layers[l].N:]
-
-			print("Error on epoch #{epoch}: {H}".format(epoch=epoch, H=H))
+			if verbose:
+				print("Error on epoch #{epoch}: {H}".format(epoch=epoch, H=H))
