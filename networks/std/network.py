@@ -1,7 +1,4 @@
 import numpy as np
-from networks.std.layer import Layer
-from networks.errors import MSE
-from networks.optimizers import *
 
 class Model:
 
