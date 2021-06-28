@@ -1,5 +1,7 @@
 import numpy as np
 from networks.std.layer import Layer
+from networks.errors import MSE
+from networks.optimizers import *
 
 class Model:
 
@@ -12,6 +14,7 @@ class Model:
 			self.layers[l].log_next(self.layers[l+1].N)
 		self.error_func = error_func
 		self.optimizer = optimizer
+		self.optimizer.compile([layer.N for layer in self.layers])
 
 	def _predict(self, x):
 		self.layers[0].feed(x)
@@ -33,6 +36,8 @@ class Model:
 		return self.error_func(Y, predictions)
 
 	def fit(self, inputs, labels, epochs=75, verbose=True):
+		vals = []
+
 		for epoch in range(1, epochs+1):
 			if verbose:
 				H = 0
@@ -61,10 +66,13 @@ class Model:
 					for j in range(self.layers[l].N):
 						for i in range(self.layers[l-1].N):
 							weights_grads[j][i] = errors[-l][j]*self.layers[l-1].neurons[i]
-				
+					
 					gradients = np.append(weights_grads, thresholds_grads)
-					updates = self.optimizer.step(gradients, layer=l-1)
+					updates = self.optimizer.step(gradients, layer=l-1, epoch=epoch)
 					self.layers[l-1].weights += np.reshape(updates[:-self.layers[l].N], (self.layers[l].N, self.layers[l-1].N))
 					self.layers[l].thresholds += updates[-self.layers[l].N:]
+
 			if verbose:
 				print("Error on epoch #{epoch}: {H}".format(epoch=epoch, H=H))
+			vals.append(H)
+		return vals
