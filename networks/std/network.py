@@ -32,17 +32,18 @@ class Model:
 		predictions = self.predict(X)
 		return self.error_func(Y, predictions)
 
-	def fit(self, inputs, labels, epochs=75, verbose=True):
-		vals = []
+	def fit_batch(self, inputs, labels, epochs=75, verbose=True, return_errors=False):
+		if return_errors:
+			vals = []
 
 		for epoch in range(1, epochs+1):
-			if verbose:
+			if verbose or return_errors:
 				H = 0
 
 			for u in range(len(inputs)):
 				X, Y = inputs[u], labels[u]
 
-				if verbose:
+				if verbose or return_errors:
 					predicted = self._predict(X)
 					H += self.error_func(Y, predicted)
 
@@ -71,5 +72,60 @@ class Model:
 
 			if verbose:
 				print("Error on epoch #{epoch}: {H}".format(epoch=epoch, H=H))
-			vals.append(H)
-		return vals
+			if return_errors:
+				vals.append(H)
+		if return_errors:
+			return vals
+
+	def fit(self, inputs, labels, epochs=75, batches=True, batch_size=32, verbose=True, return_errors=False):
+		if return_errors:
+			vals = []
+
+		if not batches or batch_size == 1:
+			return self.fit_batch(inputs, labels, epochs, verbose, return_errors)
+
+		for epoch in range(1, epochs+1):
+
+			if verbose or return_errors:
+				H = 0
+
+			for batch in range(int(np.ceil(len(labels)/batch_size))):
+				updates = [np.zeros(shape=(self.layers[i].N*(self.layers[i-1].N+1),)) for i in range(1,self.L)]
+				for u in range(batch*batch_size, min((batch+1)*batch_size, len(inputs))):
+					X, Y = inputs[u], labels[u]
+
+					if verbose or return_errors:
+						predicted = self._predict(X)
+						H += self.error_func(Y, predicted)
+
+					B_L = self.layers[-2].get_local_fields(self.layers[-1].thresholds)
+					errors_L = self.error_func.grad(Y, predicted)*self.layers[-2].g(B_L, deriv=True)
+					errors = [errors_L]
+
+					for l in range(self.L-1, 1, -1):
+						B_l = self.layers[l-2].get_local_fields(self.layers[l-1].thresholds)
+						g_prime = self.layers[l-1].g(B_l, deriv=True)
+
+						error_l = np.dot(self.layers[l-1].weights.T, errors[-1])
+						errors.append(error_l*g_prime)
+
+					for l in range(1, self.L):
+						weights_grads = np.zeros(self.layers[l-1].weights.shape)
+						thresholds_grads = errors[-l]
+						for j in range(self.layers[l].N):
+							for i in range(self.layers[l-1].N):
+								weights_grads[j][i] = errors[-l][j]*self.layers[l-1].neurons[i]
+						
+						gradients = np.append(weights_grads, thresholds_grads)
+						updates[l-1] += self.optimizer.step(gradients, layer=l-1, epoch=epoch)
+				
+				for l in range(1, self.L):
+					self.layers[l-1].weights += np.reshape(updates[l-1][:-self.layers[l].N], (self.layers[l].N, self.layers[l-1].N))/batch_size
+					self.layers[l].thresholds += updates[l-1][-self.layers[l].N:]/batch_size
+
+			if verbose:
+				print("Error on epoch #{epoch}: {H}".format(epoch=epoch, H=H))
+			if return_errors:
+				vals.append(H)
+		if return_errors:
+			return vals
