@@ -1,8 +1,5 @@
 import numpy as np
 
-# TODO: finish the stupid ass gradients
-
-
 '''
 grad() returns ∂Hi/∂y where Hi is the inside of the error function
 it's the part that is commmon in all of the derivative, caused/
