@@ -5,7 +5,6 @@ import os
 
 class Regressor:
 
-	# args = [learning rate, weights standard deviation]
 	def __init__(self, N, lr, stddev):
 		self.N = N
 		self.lr = lr
