@@ -31,8 +31,9 @@ class Model:
 			Y = np.array(Y)
 		predictions = self.predict(X)
 		return self.error_func(Y, predictions)
-
-	def fit_batch(self, inputs, labels, epochs=75, verbose=True, return_errors=False):
+	
+	# trains the network with stochastic 
+	def fit_stochastic(self, inputs, labels, epochs=75, verbose=True, return_errors=False):
 		if return_errors:
 			vals = []
 
@@ -82,7 +83,7 @@ class Model:
 			vals = []
 
 		if not batches or batch_size == 1:
-			return self.fit_batch(inputs, labels, epochs, verbose, return_errors)
+			return self.fit_stochastic(inputs, labels, epochs, verbose, return_errors)
 
 		for epoch in range(1, epochs+1):
 
