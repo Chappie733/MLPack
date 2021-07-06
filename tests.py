@@ -4,34 +4,6 @@ from networks.optimizers import *
 from networks.std.network import Model
 from networks.std.layer import Layer
 
-import tensorflow as tf
-from tensorflow.keras import layers
-
-print("\n"*10)
-
-SAMPLE_SIZE = 300
-X = np.random.uniform(low=-5, high=5, size=(SAMPLE_SIZE, 3))
-target_weights = np.random.uniform(low=-10, high=1, size=(3,4))
-Y = np.dot(X, target_weights)
-
-model = Model([Layer(3), Layer(7,activation=ReLu), Layer(4)])
-model.compile(MSE(), SGD(lr=0.001))
-
-tf_model = tf.keras.Sequential(
-	tf.keras.Input(shape=(3,)),
-	layers.Dense(5, activation='relu'),
-	layers.Dense(4)
-	)
-tf_model.compile(optimizer=tf.keras.optimizers.SGD(lr=0.001),
-				loss='mse',
-				metrics=[tf.keras.metrics.MeanSquaredError()])
-
-model.fit(X,Y, epochs=1000)
-print("\n"*10)
-tf_model.fit(X,Y, epochs=1000)
-
-'''
-
 momentum = Model([Layer(3), Layer(4)])
 momentum.compile(MSE(), Momentum(lr=0.1))
 
@@ -76,4 +48,3 @@ plt.plot([epoch for epoch in range(10, 76)], adam_errors[9:])
 plt.xlabel('Epochs')
 plt.ylabel('Mean Squared Error')
 plt.show()
-'''
