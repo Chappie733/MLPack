@@ -118,7 +118,7 @@ class Model:
 						
 						gradients = np.append(weights_grads, thresholds_grads)
 						updates[l-1] += self.optimizer.step(gradients, layer=l-1, epoch=epoch)
-				
+					
 				for l in range(1, self.L):
 					self.layers[l-1].weights += np.reshape(updates[l-1][:-self.layers[l].N], (self.layers[l].N, self.layers[l-1].N))/batch_size
 					self.layers[l].thresholds += updates[l-1][-self.layers[l].N:]/batch_size

@@ -1,4 +1,6 @@
-import networks.activations
-import networks.std.layer
-import regression.regression
-import networks.std.network
+from classification import *
+from networks import *
+from regression import *
+import tests
+
+__author__ = 'Chappie'

@@ -1,4 +1,5 @@
 import numpy as np
+from numbers import Number
 import h5py
 import os
 
