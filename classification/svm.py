@@ -34,7 +34,7 @@ class SVM:
         s = self.bias
         for i in range(len(self.alphas)):
             s += self.alphas[i]*self.Y[i]*self.kernel(self.X[i], x, c=self.c, stddev=self.stddev, n=self.n, gamma=self.gamma)
-        return 1 if s > 0 else -1 # s could be 0, np.sign(0) = 0
+        return 1 if s >= 0 else -1 # s could be 0, np.sign(0) = 0
 
     def predict(self, X):
         return [self._predict(x) for x in X]
