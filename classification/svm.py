@@ -81,26 +81,3 @@ class SVM:
     # Hinge loss
     def loss(self, Y, predictions):
         return np.sum(np.maximum(1-Y*predictions, 0))
-
-
-SAMPLE_SIZE = 4
-FEATURES = 3
-epochs = 1000
-
-X = np.random.uniform(low=-1,high=1, size=(SAMPLE_SIZE, FEATURES))
-Y = np.sign(np.random.uniform(low=-1, high=1, size=(SAMPLE_SIZE,)))
-Y[Y==0] = 1
-
-model = SVM(kernel=polynomial)
-model.fit(X,Y)
-
-preds = model.predict(X[:10])
-outs = Y[:10]
-
-pred_classes = ["A" if x == 1 else "B" for x in preds]
-outs_classes = ["A" if x == 1 else "B" for x in outs]
-
-print("Predictions: " + ', '.join(pred_classes))
-print("Correct classification: " + ', '.join(outs_classes))
-
-print("\nAmount of Support vectors: %i" % len(np.where(model.alphas!=0)))
