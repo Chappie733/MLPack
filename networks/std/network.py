@@ -32,7 +32,7 @@ class Model:
 		predictions = self.predict(X)
 		return self.error_func(Y, predictions)
 	
-	# trains the network with stochastic 
+	# trains the network with stochastic gradient descent
 	def fit_stochastic(self, inputs, labels, epochs=75, verbose=True, return_errors=False):
 		if return_errors:
 			vals = []
