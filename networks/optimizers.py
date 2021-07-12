@@ -43,7 +43,7 @@ class Adagrad(Optimizer):
 		self.running_mean = None
 
 	def compile(self, struct):
-		self.running_mean = [np.zeros(shape=(struct[l+1]*(struct[l]+1))) for l in range(len(struct)-1)]
+		self.running_mean = [np.ones(shape=(struct[l+1]*(struct[l]+1))) for l in range(len(struct)-1)]
 
 	def step(self, grads, **kwargs):
 		layer = 0 if 'layer' not in kwargs else kwargs['layer']
@@ -59,7 +59,7 @@ class Adadelta(Optimizer):
 		self.running_mean = None
 
 	def compile(self, struct):
-		self.running_mean = [np.zeros(shape=(struct[l+1]*(struct[l]+1))) for l in range(len(struct)-1)]
+		self.running_mean = [np.ones(shape=(struct[l+1]*(struct[l]+1))) for l in range(len(struct)-1)]
 
 	def step(self, grads, **kwargs):
 		layer = 0 if 'layer' not in kwargs else kwargs['layer']
@@ -75,8 +75,8 @@ class Adam(Optimizer):
 		self.gamma = gamma
 
 	def compile(self, struct):
-		self.m = [np.zeros(shape=(struct[l+1]*(struct[l]+1))) for l in range(len(struct)-1)]
-		self.v = [np.zeros(shape=(struct[l+1]*(struct[l]+1))) for l in range(len(struct)-1)]
+		self.m = [np.ones(shape=(struct[l+1]*(struct[l]+1))) for l in range(len(struct)-1)]
+		self.v = [np.ones(shape=(struct[l+1]*(struct[l]+1))) for l in range(len(struct)-1)]
 
 	def step(self, grads, **kwargs):
 		layer = 0 if 'layer' not in kwargs else kwargs['layer']
