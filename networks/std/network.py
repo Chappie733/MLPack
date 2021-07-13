@@ -1,4 +1,6 @@
 import numpy as np
+from networks.std.layer import Layer
+from networks.optimizers import get_basic_instance
 import os
 import h5py
 
@@ -136,21 +138,38 @@ class Model:
 	def __str__(self):
 		res = f"Sequential Model: name: {self.name}, layers: {self.L}\n"
 		trainable_params = 0
-		for layer in self.layers:
-			res += str(layer)
-			trainable_params += layer.get_trainable_params()
-		res += f"Trainable parameters: {trainable_params}"
+		for i in range(self.L):
+			res += str(self.layers[i])
+			trainable_params += self.layers[i].get_trainable_params()
+		res += f"Trainable parameters: {trainable_params-len(self.layers[0].thresholds)}"
 		return res
 
 	def save(self, filename, absolute=False):
-		dirname = os.getcwd()
-		path = filename if absolute else os.path.join(dirname, filename)
-		file = h5py.File(path, 'w')
+		path = filename if absolute else os.path.join(os.getcwd(), filename)
+		file = h5py.File(path + '.h5', 'w')
 		structure = np.array([[layer.N, layer._type] for layer in self.layers], dtype=np.uint32)
 		for i in range(self.L):
 			self.layers[i].save(file, i)
 
-		file.create_dataset('structure', structure.shape, np.uint32, structure, compression="gzip")
 		name = np.array([ord(x) for x in self.name], dtype=np.ubyte)
 		file.create_dataset('name', name.shape, np.ubyte, name, compression='gzip')
+		self.optimizer.save(file)
+		file.close()
+
+	def load(self, filename, absolute=False):
+		path = filename if absolute else os.path.join(os.getcwd(), filename)
+		file = h5py.File(path+'.h5', 'r')
+		self.name = ''.join([chr(x) for x in file['name']])
+		layers = []
+		curr_layer = 0
+		while f'layer_{curr_layer}' in file.keys():
+			layer = Layer(1)
+			layer.load(file, curr_layer)
+			layers.append(layer)
+			curr_layer += 1
+		self.L = len(layers)
+		self.layers = layers
+		optimizer_type = file['optimizer']['type'][0]
+		self.optimizer = get_basic_instance(optimizer_type)
+		self.optimizer.load(file)
 		file.close()
