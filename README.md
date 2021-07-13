@@ -8,7 +8,7 @@ all with fully customizable parameters.
 <h4> The agorithms implemented include (but are not limited to): </h4>
 <ul>
 <li>Standard neural networks</li>
-<li>Support vector machines</li>
+<li>Hard margin Support vector machines (with kernels)</li>
 <li>Gaussian naive bayes</li>
 <li>K-Means Clustering</li>
 <li>Perceptron model</li>
