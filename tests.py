@@ -1,23 +1,98 @@
 import numpy as np
 from networks.errors import *
 from networks.optimizers import *
+from networks.activations import ReLu
 from networks.std.network import Model
 from networks.std.layer import Layer
+from unsupervised.KMC import KMC
+from unsupervised.linear_model import LinearModel
 
 import os
 import sys
+import matplotlib.pyplot as plt
+import time
 
 if len(sys.argv) == 1:
 	sys.argv.append('')
 
 dirname = os.path.dirname(__file__)
-filepath = os.path.join(dirname, 'test_save.h5')2)
+filepath = os.path.join(dirname, 'test_save.h5')
 
 
 if sys.argv[1] == 'model_save_test':
-	sgd.save('test_save.h5')
+	model = Model([Layer(3), Layer(4, activation=ReLu)])
+	model.compile(MSE(), Momentum(lr=0.001))
+	print(model)
+	model.save('test_save')
 
-if sys.argv[1] == 'perceptron_tests':
+elif sys.argv[1] == 'model_load_test':
+	model = Model([])
+	model.load('test_save')
+	print(model)
+
+elif sys.argv[1] == 'KMC_vis':
+	X = np.array([[3,0],
+				  [2,0],
+				  [3,0],
+				  [0,3],
+				  [0,2],
+				  [0.5,2.5],
+				  [-3,-3],
+				  [-2,-3],
+				  [-3,-2]])
+
+	model = KMC(2, 3, lr=0.01)
+
+	fig = plt.figure()
+
+	def animate():
+		for i in range(20):
+			ax = fig.add_subplot(1, 1, 1)
+			ax.scatter(X[:3,0], X[:3,1], color='red')
+			ax.scatter(X[3:6,0], X[3:6,1], color='blue')
+			ax.scatter(X[6:,0], X[6:,1], color='black')
+			for j in range(model.K):
+				ax.scatter([model.weights[j][0]], [model.weights[j][1]], color='#009933', s=40, marker='x')
+			model.fit(X,epochs=5, mode='descent')
+			fig.canvas.draw()
+			time.sleep(0.5)
+
+	fig.suptitle('Input Space', fontweight ="bold")
+	fig.canvas.manager.window.after(20, animate)
+	plt.show()
+
+elif sys.argv[1] == 'uLinear_vis':
+	X = np.array([[3,0],
+				  [2,0],
+				  [3,0],
+				  [0,3],
+				  [0,2],
+				  [0.5,2.5],
+				  [-3,-3],
+				  [-2,-3],
+				  [-3,-2]])
+
+	model = LinearModel(2, 3, lr=0.01)
+	   
+	fig = plt.figure()
+
+	def animate():
+		for i in range(20):
+			ax = fig.add_subplot(1, 1, 1)
+			ax.scatter(X[:3,0], X[:3,1], color='red')
+			ax.scatter(X[3:6,0], X[3:6,1], color='blue')
+			ax.scatter(X[6:,0], X[6:,1], color='black')
+			for j in range(model.M):
+				ax.scatter([model.weights[j][0]], [model.weights[j][1]], color='#009933', s=40, marker='x')
+			model.fit(X,epochs=5)
+			fig.canvas.draw()
+			time.sleep(0.5)
+
+	fig.suptitle('Input Space', fontweight ="bold")
+	fig.canvas.manager.window.after(20, animate)
+	plt.show()
+
+elif sys.argv[1] == 'perceptron_tests':
 	NUM_SAMPLES = 1000
 	NUM_FEATURES = 5
 
@@ -44,7 +119,7 @@ if sys.argv[1] == 'perceptron_tests':
 	print(f"Rosenblatt rule accuracy: {acc}")
 
 
-if sys.argv[1] == 'optimizers_comparison':
+elif sys.argv[1] == 'optimizers_comparison':
 	SAMPLE_SIZE = 300
 	X = np.random.uniform(low=-5, high=5, size=(SAMPLE_SIZE, 3))
 	target_weights = np.random.uniform(low=-10, high=1, size=(3,4))
