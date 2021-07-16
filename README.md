@@ -14,7 +14,7 @@ all with fully customizable parameters.
 <li>Perceptron model</li>
 </ul>
 
-<h2>Dependencies</h2>
+# Dependencies
 <ul>
   <li>numpy</li>
   <li>h5py</li>
