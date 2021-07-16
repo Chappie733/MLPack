@@ -1,5 +1,6 @@
 import numpy as np
 import h5py
+import os
 
 # K-Means Clustering
 class KMC:
@@ -44,14 +45,14 @@ class KMC:
 		return "-"*20+f"K-Means Clusterer:\nClusters: {self.K}\nFeatures: {self.N}\nLearning rate: {self.lr}"+"-"*20
 
 	def save(self, filename, absolute=False):
-		path = filename if not absolute else os.path.join(os.getcwd(), filename)
+		path = filename if absolute else os.path.join(os.getcwd(), filename)
 		file = h5py.File(path+'.h5', 'w')
 		file.create_dataset('weights', self.weights.shape, np.float32, self.weights, compression='gzip')
 		file.create_dataset('lr', (1,), np.float64, [self.lr], compression='gzip')
 		file.close()
 
 	def load(self, filename, absolute=False):
-		path = filename if not absolute else os.path.join(os.getcwd(), filename)
+		path = filename if absolute else os.path.join(os.getcwd(), filename)
 		file = h5py.File(path + '.h5', 'r')
 		self.weights = np.array(file['weights'], dtype=np.float32)
 		self.lr = file['lr'][0]

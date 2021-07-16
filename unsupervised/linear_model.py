@@ -38,15 +38,16 @@ class LinearModel:
 
 	# absolute is whether the path is absolute or relative
 	def save(self, filename, absolute=False):
-		path = filename if not absolute else os.path.join(os.getcwd(), filename)
+		path = filename if absolute else os.path.join(os.getcwd(), filename)
 		file = h5py.File(path+'.h5', 'w')
 		file.create_dataset('weights', self.weights.shape, np.float32, self.weights, compression='gzip')
 		file.create_dataset('lr', (1,), np.float64, [self.lr], compression='gzip')
 		file.close()
 
 	def load(self, filename, absolute=False):
-		path = filename if not absolute else os.path.join(os.getcwd(), filename)
+		path = filename if absolute else os.path.join(os.getcwd(), filename)
 		file = h5py.File(path + '.h5', 'r')
 		self.weights = np.array(file['weights'], dtype=np.float32)
 		self.lr = file['lr'][0]
+		self.M, self.N = self.weights.shape
 		file.close()
