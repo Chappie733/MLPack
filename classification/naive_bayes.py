@@ -1,8 +1,10 @@
 import numpy as np
+import h5py
+import os
 
 class NaiveBayes:
 
-    def __init__(self, name=None):
+    def __init__(self, name='Naive Bayes'):
         self.name = name
 
     def _predict(self, x):
@@ -22,9 +24,8 @@ class NaiveBayes:
 
         self._labels = np.unique(Y)
         self.n_labels = len(self._labels)
-        n_samples, n_features = X.shape
-        self.mean = np.zeros((n_samples, n_features))
-        self.var = np.zeros((n_samples, n_features))
+        self.mean = np.zeros(X.shape)
+        self.var = np.zeros(X.shape)
         self.P_C = np.array([len(np.where(Y==i)[0])/float(len(Y)) for i in self._labels])
 
         # for each class
@@ -35,3 +36,24 @@ class NaiveBayes:
 
     def gaussian(self, x, idx):
         return np.exp(-((x-self.mean[idx])**2/(2*self.var[idx])))/np.sqrt(2*np.pi*self.var[idx])
+
+    def save(self, filename, absolute=False):
+        path = filename if absolute else os.path.join(os.getcwd(), filename)
+        file = h5py.File(path+'.h5', 'w')
+        file.create_dataset('labels', self._labels.shape, self._labels.dtype, self._labels, compression="gzip")
+        file.create_dataset('mean', self.mean.shape, self.mean.dtype, self.mean, compression="gzip")
+        file.create_dataset('variance', self.var.shape, self.var.dtype, self.var, compression="gzip")
+        file.create_dataset('priors', self.P_C.shape, self.P_C.dtype, self.P_C, compression="gzip")
+        name_ASCII = np.array([ord(x) for x in self.name], dtype=np.ubyte)
+        file.close()
+
+    def load(self, filename, absolute=False):
+        path = filename if absolute else os.path.join(os.getcwd(), filename)
+        file = h5py.File(path+'.h5', 'w')
+        self._labels = np.array(file['labels'])
+        self.mean = np.array(file['mean'])
+        self.var = np.array(file['variance'])
+        self.P_C = np.array(file['priors'])
+        self.n_labels = len(self._labels)
+        self.name = ''.join([chr(x) for x in file['name']])
+        file.close()

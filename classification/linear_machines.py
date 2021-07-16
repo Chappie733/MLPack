@@ -1,8 +1,10 @@
 import numpy as np
+import h5py
+import os
 
 class LinearMachine:
 
-	def __init__(self, N, M, lr=0.001, name='linear machine'):
+	def __init__(self, N, M, name='linear machine'):
 		self.name = name
 		self.N = N # elements in the feature vector
 		self.M = M # classes
@@ -40,3 +42,19 @@ class LinearMachine:
 	def get_accuracy(self, X, Y):
 		predictions = self.predict(X)
 		return len(np.where(predictions==Y)[0])/len(Y)
+
+	def save(self, filename, absolute=False):
+		path = filename if absolute else os.path.join(os.getcwd(), filename)
+		file = h5py.File(path+'.h5', 'w')
+		file.create_dataset('weights', self.weights.shape, np.float32, self.weights, compression="gzip")
+		name_ascii = np.array([ord(x) for x in self.name], dtype=np.ubyte)
+		file.create_dataset('name', name_ascii.shape, np.ubyte, name_ascii, compression="gzip")
+		file.close()
+
+	def load(self, filename, absolute=False):
+		path = filename if absolute else os.path.join(os.getcwd(), filename)
+		file = h5py.File(path+'.h5', 'r')
+		self.weights = np.array(file['weights'])
+		self.name = ''.join([chr(x) for x in file['name']])
+		self.M, self.N = self.weights.shape
+		file.close()
