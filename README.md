@@ -16,6 +16,7 @@ all with fully customizable parameters.
 
 <h2>Dependencies</h2>
 <ul>
-<li>numpy</li>
-<li>h5py</li>
+  <li>numpy</li>
+  <li>h5py</li>
+  <li>cvxopt</li>
 </ul>
