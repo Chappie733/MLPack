@@ -1,9 +1,17 @@
 import numpy as np
 from networks.activations import *
 
+def get_basic_layer_instance(layer_type):
+	if layer_type == 1:
+		return Layer(1)
+	if layer_type == 2:
+		return ELU(1)
+	if layer_type == 3:
+		return Dropout(1)
+
 class Layer:
 
-	def __init__(self, N, activation=linear, k=1, name='layer', _type=1):
+	def __init__(self, N, activation='linear', k=1, name='Dense', _type=1):
 		self.N = N
 		self.k = k
 		self.neurons = np.zeros(shape=(N,), dtype=np.float32)
@@ -18,7 +26,7 @@ class Layer:
 
 	def log_next(self, M):
 		stddev = np.sqrt(self.k/float(self.N))
-		self.weights = np.random.normal(scale=stddev, size=(M,self.N)) # mean is 0 by default
+		self.weights = np.random.normal(scale=stddev, size=(M, self.N)) # mean is 0 by default
 
 	def get_local_fields(self, bias):
 		return np.dot(self.weights, self.neurons)+bias
@@ -66,19 +74,58 @@ class Layer:
 		self.k = group['k'][0]
 
 	def __str__(self):
-		return "-"*40+"\nDense [neurons:{neurons}, k={k}, activation={g}]".format(neurons=self.N, k=self.k, g=self.g.__name__)+"\n"
+		return "-"*40+f"\n{self.name} [neurons:{self.N}, k={self.k}, activation={self.g.__name__}]\n"
 
 	def __call__(self, x):
 		self.feed(x)
 
+
 class ELU(Layer):
 
-	def __init__(self, N, activation=ELU, k=1, alpha=0.1, name='ELU layer'):
+	def __init__(self, N, activation=ELU, k=1, alpha=0.1, name='ELU'):
 		super().__init__(N, activation, k=k, _type=2)
 		self.alpha = alpha
 
 	def get_activation(self, thresholds):
 		return self.g(self.get_local_fields(thresholds), deriv=False, alpha=self.alpha)
 
-	def __str__(self):
-		return "-"*40+"\nELU [neurons:{neurons}, alpha={alpha}, k={k}]".format(neurons=self.N,alpha=self.alpha,k=self.k)+"\n"
+
+class Dropout(Layer):
+
+	def __init__(self, N, activation='linear', name='Dropout', k=1, rate=0.1, **kwargs):
+		super().__init__(N, activation=activation, name=name, k=k, _type=3)
+		self.rate = rate
+		
+	def log_next(self, M):
+		stddev = np.sqrt(self.k/float(self.N))
+		self._weights = np.random.normal(scale=stddev, size=(M, self.N)) # private weights, only used inside the dropout layer
+		self.fixed = np.random.choice(a=[0, 1], size=(M, self.N), p=[self.rate, 1-self.rate])
+
+	def get_local_fields(self, bias):
+		return np.dot(self._weights*self.fixed, self.neurons)+bias
+
+	def save(self, file, layer_idx):
+		super().save(file, layer_idx)
+		group = file[f'layer_{layer_idx}']
+		if '_weights' in dir(self):
+			group.create_dataset('weights', self.weights.shape, np.float32, self.weights, compression="gzip")
+			group.create_dataset('fixed', self.fixed.shape, np.int16, self.fixed, compression="gzip")
+		group.create_dataset('rate', (1,), np.float32, [self.rate], compression="gzip")
+
+	def load(self, file, layer_idx):
+		super().load(file, layer_idx)
+		group = file[f'layer_{layer_idx}']
+		try:
+			self._weights = np.array(group['weights'], dtype=np.float32)
+			self.fixed = np.array(group['fixed'], dtype=np.int16)
+		except KeyError:
+			pass
+		self.rate = group['rate'][0]
+
+	def __getattribute__(self, name):
+		if name == 'weights':
+			return self._weights*self.fixed
+		return super().__getattribute__(name)
+
+	def get_trainable_params(self):
+		return (0 if 'fixed' not in dir(self) else self.fixed.shape[0]*self.fixed.shape[1]-len(self.fixed[self.fixed==0]))+len(self.thresholds)
