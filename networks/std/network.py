@@ -1,6 +1,6 @@
 import numpy as np
-from networks.std.layer import Layer
-from networks.optimizers import get_basic_instance
+from networks.std.layer import get_basic_layer_instance
+from networks.optimizers import get_basic_optimizer_instance
 import os
 import h5py
 
@@ -60,7 +60,7 @@ class Model:
 					B_l = self.layers[l-2].get_local_fields(self.layers[l-1].thresholds)
 					g_prime = self.layers[l-1].g(B_l, deriv=True)
 
-					error_l = np.dot(self.layers[l-1].weights.T, errors[-1])
+					error_l = np.dot(self.layers[l-1].get_transform_matrix().T, errors[-1])
 					errors.append(error_l*g_prime)
 
 				for l in range(1, self.L):
@@ -144,6 +144,9 @@ class Model:
 		res += f"Trainable parameters: {trainable_params-len(self.layers[0].thresholds)}"
 		return res
 
+	def __getitem__(self, index):
+		return self.layers[index]
+
 	def save(self, filename, absolute=False):
 		path = filename if absolute else os.path.join(os.getcwd(), filename)
 		file = h5py.File(path + '.h5', 'w')
@@ -163,13 +166,14 @@ class Model:
 		layers = []
 		curr_layer = 0
 		while f'layer_{curr_layer}' in file.keys():
-			layer = Layer(1)
+			layer_type = file[f'layer_{curr_layer}']['type'][0]			
+			layer = get_basic_layer_instance(layer_type)
 			layer.load(file, curr_layer)
 			layers.append(layer)
 			curr_layer += 1
 		self.L = len(layers)
 		self.layers = layers
 		optimizer_type = file['optimizer']['type'][0]
-		self.optimizer = get_basic_instance(optimizer_type)
+		self.optimizer = get_basic_optimizer_instance(optimizer_type)
 		self.optimizer.load(file)
 		file.close()
