@@ -1,6 +1,6 @@
 # MLPack
 <p align="center">
-  <img src="logo.png" style="border-style:solid; border-radius: 40px; border-color: black; border-width: 5px;"><br>
+  <img src="logo.png"><br>
 </p>
 A work-in-progress general purpose machine learning library written in python only using numpy and h5py.<br>
 MLPack provides lightweight implementations of many popular machine learning algorithms and models,
