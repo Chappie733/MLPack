@@ -51,5 +51,5 @@ class PCA:
 		self.weights = np.array(file['weights'])
 		self.lr_start, self.var_start, self.tau_lr, self.tau_var = file['params']
 		self.name = ''.join([chr(x) for x in file['name']])
-		self.M, self.N = weights.shape
+		self.M, self.N = self.weights.shape
 		file.close()
