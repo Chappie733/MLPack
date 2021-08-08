@@ -1,7 +1,7 @@
 import numpy as np
 
 # returns a basic instace (with the default parameters) of the optimizer given its type
-def get_basic_instance(optim_type):
+def get_basic_optimizer_instance(optim_type):
 	if optim_type == 1:
 		return SGD()
 	if optim_type == 2:
@@ -88,12 +88,13 @@ class Momentum(Optimizer):
 
 class Adagrad(Optimizer):
 
-	def __init__(self, lr=0.2):
+	def __init__(self, lr=0.2, initial_mean=1.0):
 		super().__init__('Adagrad', lr, 3)
 		self.running_mean = None
+		self.initial_mean = 1.0
 
 	def compile(self, struct):
-		self.running_mean = [np.zeros(shape=(struct[l+1]*(struct[l]+1))) for l in range(len(struct)-1)]
+		self.running_mean = [np.ones(shape=(struct[l+1]*(struct[l]+1)))*self.initial_mean for l in range(len(struct)-1)]
 
 	def step(self, grads, **kwargs):
 		layer = 0 if 'layer' not in kwargs else kwargs['layer']
@@ -106,7 +107,7 @@ class Adagrad(Optimizer):
 		group = file['optimizer']
 		for layer_idx, layer_mean in enumerate(self.running_mean):
 			group.create_dataset(f'layer_{layer_idx}_mean', layer_mean.shape, np.float32, layer_mean, compression="gzip")
-
+		
 	def load(self, file):
 		super().load(file)
 		group = file['optimizer']
@@ -119,13 +120,14 @@ class Adagrad(Optimizer):
 
 class Adadelta(Optimizer):
 
-	def __init__(self, lr=0.001, gamma=0.99):
+	def __init__(self, lr=0.001, gamma=0.99, initial_mean=1):
 		super().__init__('Adadelta', lr, 4)
 		self.gamma = gamma
 		self.running_mean = None
+		self.initial_mean = initial_mean
 
 	def compile(self, struct):
-		self.running_mean = [np.zeros(shape=(struct[l+1]*(struct[l]+1))) for l in range(len(struct)-1)]
+		self.running_mean = [np.ones(shape=(struct[l+1]*(struct[l]+1)))*self.initial_mean for l in range(len(struct)-1)]
 
 	def step(self, grads, **kwargs):
 		layer = 0 if 'layer' not in kwargs else kwargs['layer']
