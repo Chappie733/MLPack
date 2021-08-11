@@ -1,7 +1,6 @@
 import numpy as np
 from cvxopt import matrix, solvers
-import h5py
-import os
+from classification.classifier import Classifier
 
 # Lagrange multipliers threshold
 DEFAULT_LM_THRESHOLD = 1e-4
@@ -30,11 +29,12 @@ def rbf(x,y, **kwargs):
 
 @logger
 def sigmoid(x,y, **kwargs):
-    return np.tanh(gamma*np.dot(x,y)+kwargs['c'])
+    return np.tanh(kwargs['gamma']*np.dot(x,y)+kwargs['c'])
 
-class SVM:
+class SVM(Classifier):
 
     def __init__(self, kernel='linear', name='SVM', **kwargs):
+        super().__init__(1, 2, name)
         self.kernel = kernel if not isinstance(kernel, str) else KERNELS[kernel]
         self.name = name
         self.c = 0 if 'c' not in kwargs else kwargs['c']
@@ -49,10 +49,7 @@ class SVM:
             s += self.alphas[i]*self.Y[i]*self.kernel(self.X[i], x, c=self.c, stddev=self.stddev, n=self.n, gamma=self.gamma)
         return 1 if s >= 0 else -1 # s could be 0, np.sign(0) = 0
 
-    def predict(self, X):
-        return np.array([self._predict(x) for x in X])
-
-    def fit(self, X, Y, verbose=True):
+    def fit(self, X, Y, verbose=True, *args, **kwargs):
         if not isinstance(Y, np.ndarray):
             Y = np.array(Y)
         if not isinstance(X, np.ndarray):
@@ -61,6 +58,8 @@ class SVM:
         p = len(X)
         self.X = X
         self.Y = Y
+
+        self.N = X.shape[1]
 
         P = matrix(0.0, (p,p))
         for j in range(p):
@@ -95,24 +94,16 @@ class SVM:
     def loss(self, Y, predictions):
         return np.sum(np.maximum(1-Y*predictions, 0))
 
-    def save(self, filename, absolute=False):
-        path = filename if absolute else os.path.join(os.getcwd(), filename)
-        file = h5py.File(path+'.h5', 'w')
+    def _save(self, file):
         file.create_dataset('alphas', self.alphas.shape, np.float32, self.alphas, compression="gzip")
         file.create_dataset('bias', (1,), np.float32, self.bias, compression="gzip")
         file.create_dataset('data_X', self.X.shape, np.float32, self.X, compression="gzip")
         file.create_dataset('data_Y', self.Y.shape, np.float32, self.Y, compression="gzip")
         file.create_dataset('params', (5,), np.float32, [self.c, self.stddev, self.n, self.gamma, self.threshold], compression="gzip")
         kernel_name_ASCII = np.array([ord(x) for x in self.kernel.__name__], dtype=np.ubyte)
-        name_ASCII = np.array([ord(x) for x in self.name], dtype=np.ubyte)
-        file.create_dataset('name', name_ASCII.shape, np.ubyte, name_ASCII, compression="gzip")
         file.create_dataset('kernel', kernel_name_ASCII.shape, np.ubyte, kernel_name_ASCII, compression="gzip")
-        file.close()
 
-    def load(self, filename, absolute=False):
-        global KERNELS
-        path = filename if absolute else os.path.join(os.getcwd(), filename)
-        file = h5py.File(path+'.h5', 'r')
+    def _load(self, file):
         self.alphas = np.array(file['alphas'])
         self.bias = file['bias'][0]
         self.X = np.array(file['data_X'], dtype=np.float32)
@@ -120,4 +111,3 @@ class SVM:
         self.c, self.stddev, self.n, self.gamma, self.threshold = file['params']
         self.name = ''.join([chr(x) for x in file['name']])
         self.kernel = KERNELS[''.join([chr(x) for x in file['kernel']])]
-        file.close()

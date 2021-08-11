@@ -1,22 +1,18 @@
 import numpy as np
 import h5py
 import os
+from classification.classifier import Classifier
 
-class LinearMachine:
+class LinearMachine(Classifier):
 
 	def __init__(self, N, M, name='linear machine'):
-		self.name = name
-		self.N = N # elements in the feature vector
-		self.M = M # classes
+		super().__init__(N, M, name)
 		self.weights = np.zeros((M, N))
 
 	def _predict(self, x):
 		return np.argmax(np.dot(self.weights, x))
 
-	def predict(self, X):
-		return np.array([self._predict(x) for x in X])
-
-	def fit(self, X, Y, steps=1000):
+	def fit(self, X, Y, steps=1000, *args, **kwargs):
 		pi = np.random.normal(scale=1, size=(self.M, self.N))
 		streak_pi, streak_w = 0, 0
 		num_ok_w = 0
@@ -39,16 +35,18 @@ class LinearMachine:
 				pi[i] = pi[i] - 2*X[k]
 				pi = pi + X[k]
 
-	def get_accuracy(self, X, Y):
-		predictions = self.predict(X)
-		return len(np.where(predictions==Y)[0])/len(Y)
+	def _save(self, file):
+		file.create_dataset('weights', self.weights.shape, np.float32, self.weights, compression="gzip")
+
+	def _load(self, file):
+		self.weights = np.array(file['weights'])
 
 	def save(self, filename, absolute=False):
-		path = filename if absolute else os.path.join(os.getcwd(), filename)
-		file = h5py.File(path+'.h5', 'w')
+		path = os.path.join(os.getcwd(), filename) if not absolute else filename
+		file = h5py.File(path+".h5", 'w')
+		name_ASCII = np.array([ord(x) for x in self.name], np.ubyte) # name of the model saved as array of ASCII values
+		file.create_dataset('name', name_ASCII.shape, np.ubyte, name_ASCII, compression="gzip")
 		file.create_dataset('weights', self.weights.shape, np.float32, self.weights, compression="gzip")
-		name_ascii = np.array([ord(x) for x in self.name], dtype=np.ubyte)
-		file.create_dataset('name', name_ascii.shape, np.ubyte, name_ascii, compression="gzip")
 		file.close()
 
 	def load(self, filename, absolute=False):
