@@ -1,5 +1,6 @@
 import numpy as np
 from networks.activations import *
+import networks.resnet.reslayer as ResLayer
 
 def get_basic_layer_instance(layer_type):
 	if layer_type == 1:
@@ -8,6 +9,8 @@ def get_basic_layer_instance(layer_type):
 		return ELU(1)
 	if layer_type == 3:
 		return Dropout(1)
+	if layer_type == 4:
+		return ResLayer.ResLayer(1)
 
 class Layer:
 
@@ -24,15 +27,18 @@ class Layer:
 		else:
 			self.g = activation
 
-	def log_next(self, M):
+	def log_next(self, M, *args):
 		stddev = np.sqrt(self.k/float(self.N))
 		self.weights = np.random.normal(scale=stddev, size=(M, self.N)) # mean is 0 by default
 
-	def get_local_fields(self, bias):
+	def get_local_fields(self, bias, **kwargs):
 		return np.dot(self.weights, self.neurons)+bias
 
+	def back_transform(self, errors):
+		return np.dot(self.weights.T, errors)
+
 	# feed a previous layer or an input
-	def feed(self, prev):
+	def feed(self, prev, *args):
 		if not isinstance(prev, np.ndarray) and not isinstance(prev, Layer):
 			raise TypeError("Expected numpy array or layer object but received {type} instead".format(type=type(prev)))
 		if isinstance(prev, Layer):
@@ -80,6 +86,7 @@ class Layer:
 		self.feed(x)
 
 
+
 class ELU(Layer):
 
 	def __init__(self, N, activation=ELU, k=1, alpha=0.1, name='ELU'):
@@ -88,6 +95,7 @@ class ELU(Layer):
 
 	def get_activation(self, thresholds):
 		return self.g(self.get_local_fields(thresholds), deriv=False, alpha=self.alpha)
+
 
 
 class Dropout(Layer):
@@ -129,3 +137,5 @@ class Dropout(Layer):
 
 	def get_trainable_params(self):
 		return (0 if 'fixed' not in dir(self) else self.fixed.shape[0]*self.fixed.shape[1]-len(self.fixed[self.fixed==0]))+len(self.thresholds)
+
+
