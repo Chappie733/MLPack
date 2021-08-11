@@ -60,7 +60,7 @@ class Model:
 					B_l = self.layers[l-2].get_local_fields(self.layers[l-1].thresholds)
 					g_prime = self.layers[l-1].g(B_l, deriv=True)
 
-					error_l = np.dot(self.layers[l-1].get_transform_matrix().T, errors[-1])
+					error_l = self.layers[l-1].back_transform(errors[-1])
 					errors.append(error_l*g_prime)
 
 				for l in range(1, self.L):
@@ -111,7 +111,7 @@ class Model:
 						B_l = self.layers[l-2].get_local_fields(self.layers[l-1].thresholds)
 						g_prime = self.layers[l-1].g(B_l, deriv=True)
 
-						error_l = np.dot(self.layers[l-1].weights.T, errors[-1])
+						error_l = self.layers[l-1].back_transform(errors[-1])
 						errors.append(error_l*g_prime)
 
 					for l in range(1, self.L):
@@ -150,7 +150,6 @@ class Model:
 	def save(self, filename, absolute=False):
 		path = filename if absolute else os.path.join(os.getcwd(), filename)
 		file = h5py.File(path + '.h5', 'w')
-		structure = np.array([[layer.N, layer._type] for layer in self.layers], dtype=np.uint32)
 		for i in range(self.L):
 			self.layers[i].save(file, i)
 
