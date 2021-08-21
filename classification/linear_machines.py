@@ -6,7 +6,7 @@ from classification.classifier import Classifier
 class LinearMachine(Classifier):
 
 	def __init__(self, N, M, name='linear machine'):
-		super().__init__(N, M, name)
+		super().__init__(N, M, name, _type=5)
 		self.weights = np.zeros((M, N))
 
 	def _predict(self, x):

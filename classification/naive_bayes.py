@@ -4,7 +4,7 @@ from classification.classifier import Classifier
 class NaiveBayes(Classifier):
 
     def __init__(self, name='Naive Bayes'):
-        super().__init__(1,1,name)
+        super().__init__(1,1,name,_type=3)
         self.name = name
 
     def _predict(self, x):

@@ -34,7 +34,7 @@ def sigmoid(x,y, **kwargs):
 class SVM(Classifier):
 
     def __init__(self, kernel='linear', name='SVM', **kwargs):
-        super().__init__(1, 2, name)
+        super().__init__(1, 2, name, _type=2)
         self.kernel = kernel if not isinstance(kernel, str) else KERNELS[kernel]
         self.name = name
         self.c = 0 if 'c' not in kwargs else kwargs['c']

@@ -3,11 +3,11 @@ from classification.classifier import Classifier
 
 class KNN(Classifier):
 
-	def __init__(self, name, neighbors_amt=3):
-		super().__init__(1, 2, name)
+	def __init__(self, name='KNN classifier', neighbors_amt=3):
+		super().__init__(1, 2, name, _type=4)
 		self.neighbors_amt = neighbors_amt
 
-	def _predict(self, x, *args, **kwargs):
+	def _predict(self, x):
 		res = np.sum((x-self.X)**2, axis=1)
 		vals = np.sort(res)[:self.neighbors_amt]
 		indices = [np.where(res==vals[i])[0][0] for i in range(len(vals))]

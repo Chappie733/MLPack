@@ -4,7 +4,7 @@ from classification.classifier import Classifier
 class Perceptron(Classifier):
 
 	def __init__(self, N, lr=0.1, name="Perceptron"):
-		super().__init__(N, 2, name)
+		super().__init__(N, 2, name, _type=1)
 		self.weights = np.zeros(N)
 		self.bias = 0
 		self.lr = lr # only used for Rosenblatt rule
@@ -69,6 +69,9 @@ class Perceptron(Classifier):
 			self._Rosenblatt(X,Y,steps)
 		else:
 			print(f"Method {method} not implemented!")
+
+	def __call__(self, x):
+		return self.predict(x)
 
 	def _save(self, file):
 		file.create_dataset('weights', self.weights.shape, np.float32, self.weights, compression="gzip")
