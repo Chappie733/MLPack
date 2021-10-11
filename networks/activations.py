@@ -1,7 +1,7 @@
 import numpy as np
 from numbers import Number
 
-#In the following functions args[0] is actually kwargs
+ACTIVATIONS = {}
 
 def parser(func):
 
@@ -12,6 +12,8 @@ def parser(func):
 			raise TypeError("Expected the parameter \'x\' to be a numpy array or a number, but received {type} instead!".format(type=type(x)))
 		return func(x, deriv, kwargs)
 
+	wrapper.__name__ = func.__name__
+	ACTIVATIONS[wrapper.__name__.lower()] = wrapper
 	return wrapper
 
 @parser
@@ -63,7 +65,7 @@ def hardtanh(x, deriv=False, *args):
 @parser
 def InverseSqrt(x, deriv=False, *args):
 	alpha = 0.1 if 'alpha' not in args[0] else args[0]['alpha']
-	return x/(np.sqrt(1+alpha*x**2)) if not deriv else 1/(1+a*x**2)**(3/2)
+	return x/(np.sqrt(1+alpha*x**2)) if not deriv else 1/(1+alpha*x**2)**(3/2)
 
 @parser
 def LeCunTanh(x, deriv=False, *args):
@@ -103,6 +105,5 @@ def softplus(x, deriv=False, *args):
 '''
 TO IMPLEMENT:
 softmax
-ELU
 
 '''
