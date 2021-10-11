@@ -14,45 +14,55 @@ def get_basic_optimizer_instance(optim_type):
 
 class Optimizer:
 
-	def __init__(self, name, lr, _type):
+	def __init__(self, name, lr, _type, decay, exp_decay):
 		self.name = name
 		self.lr = lr
 		self._type = _type
+		self.decay = decay
+		self.exp_decay = exp_decay
 
 	def compile(self, *args):
 		pass
+		
+	# this method is only called from the instances of the class, which will all have their own
+	# **kwargs, so this is just that, i don't want it to actually be the kwargs passed to this function
+	def step(self, kwargs):
+		epoch = 0 if 'epoch' not in kwargs else kwargs['epoch']
+		return self.lr*np.exp(-self.decay*epoch) if self.exp_decay else self.lr/(1+self.decay*epoch)
 
 	def __str__(self):
 		return f"[Optimizer]\nName={self.name}, learning rate: {self.lr}\n"
+
+	def __call__(self, grads, **kwargs):
+		return self.step(grads)
 
 	def save(self, file):
 		group = file.create_group('optimizer')
 		name = np.array([ord(x) for x in self.name])
 		group.create_dataset('name', name.shape, np.ubyte, name, compression='gzip')
-		group.create_dataset('lr', (1,), np.float32, [self.lr], compression='gzip')
+		group.create_dataset('lr', (1,), np.float32, [self.lr, self.decay, int(self.exp_decay)], compression='gzip')
 		group.create_dataset('type', (1,), np.ubyte, [self._type], compression='gzip')
 
 	def load(self, file):
 		group = file['optimizer']
 		self.name = ''.join([chr(x) for x in group['name']])
-		self.lr = group['lr'][0]
+		self.lr, self.decay, self.exp_decay = group['lr']
+		self.exp_decay = bool(self.exp_decay) # convert binary -> bool
 		self._type = group['type'][0]
 
 class SGD(Optimizer):
 
-	def __init__(self, lr=0.001):
-		super().__init__('Standard Gradient Descent', lr, 1)
+	def __init__(self, lr=0.001, decay=0, exp_decay=False):
+		super().__init__('Standard Gradient Descent', lr, 1, decay, exp_decay)
 
 	def step(self, grads, **kwargs):
-		return -self.lr*grads
-
-	def __call__(self, grads, **kwargs):
-		return self.step(grads)
+		lr = super().step(kwargs)
+		return -lr*grads
 
 class Momentum(Optimizer):
 
-	def __init__(self, lr=0.001, momentum=0.1):
-		super().__init__('Momentum', lr, 2)
+	def __init__(self, lr=0.001, momentum=0.1, decay=0, exp_decay=False):
+		super().__init__('Momentum', lr, 2, decay, exp_decay)
 		self.v_prev = None
 		self.momentum = momentum
 
@@ -60,8 +70,9 @@ class Momentum(Optimizer):
 		self.v_prev = [np.zeros(shape=(struct[l+1]*(struct[l]+1))) for l in range(len(struct)-1)]
 
 	def step(self, grads, **kwargs):
+		lr = super().step(kwargs)
 		layer = 0 if 'layer' not in kwargs else kwargs['layer']
-		v_t = self.momentum*self.v_prev[layer]+self.lr*grads
+		v_t = self.momentum*self.v_prev[layer]+lr*grads
 		self.v_prev[layer] = v_t
 		return -v_t
 
@@ -88,18 +99,19 @@ class Momentum(Optimizer):
 
 class Adagrad(Optimizer):
 
-	def __init__(self, lr=0.2, initial_mean=1.0):
-		super().__init__('Adagrad', lr, 3)
+	def __init__(self, lr=0.2, initial_mean=1.0, decay=0, exp_decay=False):
+		super().__init__('Adagrad', lr, 3, decay, exp_decay)
 		self.running_mean = None
-		self.initial_mean = 1.0
+		self.initial_mean = initial_mean
 
 	def compile(self, struct):
-		self.running_mean = [np.ones(shape=(struct[l+1]*(struct[l]+1)))*self.initial_mean for l in range(len(struct)-1)]
+		self.running_mean = [np.zeros(shape=(struct[l+1]*(struct[l]+1)))*self.initial_mean for l in range(len(struct)-1)]
 
 	def step(self, grads, **kwargs):
+		lr = super().step(kwargs)
 		layer = 0 if 'layer' not in kwargs else kwargs['layer']
 		self.running_mean[layer] += grads**2
-		res = -self.lr*grads/np.sqrt(self.running_mean[layer]+1e-8)
+		res = -lr*grads/np.sqrt(self.running_mean[layer]+1e-8)
 		return res
 
 	def save(self, file):
@@ -120,19 +132,20 @@ class Adagrad(Optimizer):
 
 class Adadelta(Optimizer):
 
-	def __init__(self, lr=0.001, gamma=0.99, initial_mean=1):
-		super().__init__('Adadelta', lr, 4)
+	def __init__(self, lr=0.001, gamma=0.99, initial_mean=1, decay=0, exp_decay=False):
+		super().__init__('Adadelta', lr, 4, decay, exp_decay)
 		self.gamma = gamma
 		self.running_mean = None
 		self.initial_mean = initial_mean
 
 	def compile(self, struct):
-		self.running_mean = [np.ones(shape=(struct[l+1]*(struct[l]+1)))*self.initial_mean for l in range(len(struct)-1)]
+		self.running_mean = [np.zeros(shape=(struct[l+1]*(struct[l]+1)))*self.initial_mean for l in range(len(struct)-1)]
 
 	def step(self, grads, **kwargs):
+		lr = super().step(kwargs)
 		layer = 0 if 'layer' not in kwargs else kwargs['layer']
 		self.running_mean[layer] = self.gamma*self.running_mean[layer] + (1-self.gamma)*(grads**2)
-		res = -self.lr*grads/np.sqrt(self.running_mean[layer]+1e-8)
+		res = -lr*grads/np.sqrt(self.running_mean[layer]+1e-8)
 		return res
 
 	def __str__(self):
@@ -158,8 +171,8 @@ class Adadelta(Optimizer):
 
 class Adam(Optimizer):
 
-	def __init__(self, lr=0.005, beta=0.9, gamma=0.999):
-		super().__init__('Adam', lr, 5)
+	def __init__(self, lr=0.005, beta=0.9, gamma=0.999, decay=0, exp_decay=False):
+		super().__init__('Adam', lr, 5, decay, exp_decay)
 		self.beta = beta
 		self.gamma = gamma
 
@@ -168,15 +181,14 @@ class Adam(Optimizer):
 		self.v = [np.zeros(shape=(struct[l+1]*(struct[l]+1))) for l in range(len(struct)-1)]
 
 	def step(self, grads, **kwargs):
+		lr = super().step(kwargs)
 		layer = 0 if 'layer' not in kwargs else kwargs['layer']
 		epoch = 1 if 'epoch' not in kwargs else kwargs['epoch']
 		self.m[layer] = self.beta*self.m[layer]+(1-self.beta)*grads
 		self.v[layer] = self.gamma*self.v[layer]+(1-self.gamma)*(grads**2)
 
-		v_norm = self.v[layer]/(1-self.gamma**epoch)
-		m_norm = self.m[layer]/(1-self.beta**epoch)
-
-		return -self.lr*m_norm/(np.sqrt(v_norm)+1e-8)
+		adj_lr = lr*np.sqrt(1-self.gamma**epoch)/(1-self.beta**epoch) # adjusted learning rate
+		return -adj_lr*self.m[layer]/(np.sqrt(self.v[layer]+1e-8))
 
 	def __str__(self):
 		return f"[Optimizer]\nName={self.name}, learning rate: {self.lr}, beta_1={self.beta}, beta_2={self.gamma}\n"
