@@ -45,6 +45,9 @@ class Model:
 			if verbose or return_errors:
 				H = 0
 
+			if not isinstance(labels, np.ndarray):
+				labels = np.array(labels)
+
 			for u in range(len(inputs)):
 				X, Y = inputs[u], labels[u]
 				predicted = self._predict(X)
@@ -52,8 +55,15 @@ class Model:
 				if verbose or return_errors:
 					H += self.error_func(Y, predicted)
 
-				B_L = self.layers[-2].get_local_fields(self.layers[-1].thresholds)
-				errors_L = self.error_func.grad(Y, predicted)*self.layers[-1].g(B_L, deriv=True)
+				if self.layers[-1].g.__name__ != 'softmax':
+					B_L = self.layers[-2].get_local_fields(self.layers[-1].thresholds)
+					errors_L = self.error_func.grad(Y, predicted)*self.layers[-1].g(B_L, deriv=True)
+				else:
+					# calculate softmax gradient
+					out_matrix = np.vstack([predicted]*len(predicted))
+					Z = out_matrix*out_matrix.T-out_matrix*np.eye(len(predicted))
+					errors_L = -np.dot(Z, self.error_func.grad(Y, predicted))
+					
 				errors = [errors_L]
 
 				for l in range(self.L-1, 1, -1):
@@ -89,6 +99,9 @@ class Model:
 		if not batches or batch_size == 1:
 			return self.fit_stochastic(inputs, labels, epochs, verbose, return_errors)
 
+		if not isinstance(labels, np.ndarray):
+			labels = np.array(labels)
+
 		for epoch in range(1, epochs+1):
 
 			if verbose or return_errors:
@@ -103,8 +116,15 @@ class Model:
 					if verbose or return_errors:
 						H += self.error_func(Y, predicted)
 
-					B_L = self.layers[-2].get_local_fields(self.layers[-1].thresholds)
-					errors_L = self.error_func.grad(Y, predicted)*self.layers[-1].g(B_L, deriv=True)
+					if self.layers[-1].g.__name__ != 'softmax':
+						B_L = self.layers[-2].get_local_fields(self.layers[-1].thresholds)
+						errors_L = self.error_func.grad(Y, predicted)*self.layers[-1].g(B_L, deriv=True)
+					else:
+						# calculate softmax gradient
+						out_matrix = np.vstack([predicted]*len(predicted))
+						Z = out_matrix*out_matrix.T-out_matrix*np.eye(len(predicted))
+						errors_L = -np.dot(Z, self.error_func.grad(Y, predicted))
+						
 					errors = [errors_L]
 
 					for l in range(self.L-1, 1, -1):
@@ -125,6 +145,7 @@ class Model:
 						updates[l-1] += self.optimizer.step(gradients, layer=l-1, epoch=epoch)
 					
 				for l in range(1, self.L):
+					# maybe divide by batch_size, maybe not... (its up to preference really)
 					self.layers[l-1].weights += np.reshape(updates[l-1][:-self.layers[l].N], (self.layers[l].N, self.layers[l-1].N))/batch_size
 					self.layers[l].thresholds += updates[l-1][-self.layers[l].N:]/batch_size
 
