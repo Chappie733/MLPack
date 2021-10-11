@@ -102,8 +102,6 @@ def softsign(x, deriv=False, *args):
 def softplus(x, deriv=False, *args):
 	return np.log(1+np.exp(x)) if not deriv else np.exp(x)/(1+np.exp(x))
 
-'''
-TO IMPLEMENT:
-softmax
-
-'''
+@parser
+def softmax(x, *args):
+	return np.exp(x)/np.sum(np.exp(x))
