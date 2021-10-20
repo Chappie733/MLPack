@@ -185,16 +185,6 @@ class Dropout(Layer):
         self.fixed = np.random.choice(a=[0, 1], size=(self.num_outs, self.num_neurons), p=[self.rate, 1-self.rate])
         self.weights *= self.fixed
 
-    def get_gradients(self, errors: np.ndarray) -> np.ndarray:
-        grads = np.zeros((self.num_outs, self.num_neurons))
-        errors = errors*self.activation(self.get_local_fields(), deriv=True)
-        for n in range(self.num_outs):
-            for m in range(self.num_neurons):
-                grads[n][m] = self.neurons[m]*errors[n]
-
-        grads = np.append(grads*self.fixed, errors)
-        return grads
-
     def update_params(self, updates: np.ndarray) -> None:
         self.weights = self.weights + updates[:-self.num_outs].reshape((self.num_outs, self.num_neurons))*self.fixed
         self.bias = self.bias + updates[-self.num_outs:]
