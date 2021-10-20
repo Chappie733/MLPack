@@ -7,8 +7,7 @@ MLPack provides lightweight implementations of many popular machine learning alg
 all with fully customizable parameters.
 <h4> The agorithms implemented are: </h4>
 <ul>
-  <li>Standard neural networks</li>
-  <li>Residual neural networks (ResNet)</li>
+  <li>Standard neural networks (with various optimizers and types of layers)</li>
   <li>Hard margin Support vector machines (with kernels)</li>
   <li>Gaussian naive bayes</li>
   <li>Linear Machines for binary classification</li>
