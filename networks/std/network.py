@@ -1,199 +1,208 @@
 import numpy as np
-from networks.std.layer import get_basic_layer_instance
-from networks.optimizers import get_basic_optimizer_instance
-import os
 import h5py
+import os
 
-class Model:
+from .layers import Layer
+from networks.errors import ErrorFunction
+from networks.optimizers import Optimizer
 
-	def __init__(self, layers, name='model'):
-		self.L = len(layers)
-		self.layers = layers
-		self.name = name
+class Model():
+    '''
+        A class representing a standard sequential neural network.\n
+        layers -> A list of "Layer" objects specifying in the right order the layers of the model.
+    '''
 
-	def compile(self, error_func, optimizer):
-		for l in range(self.L-1):
-			self.layers[l].log_next(self.layers[l+1].N)
-		self.error_func = error_func
-		self.optimizer = optimizer
-		self.optimizer.compile([layer.N for layer in self.layers])
+    def __init__(self, layers, name="neural network") -> None:
+        self.layers = layers
+        self.num_layers = len(layers)
+        self.name = name
 
-	def _predict(self, x):
-		self.layers[0].feed(x)
-		for l in range(1, self.L):
-			self.layers[l].feed(self.layers[l-1])
-		return self.layers[-1].neurons
+    def compile(self, error_func: ErrorFunction, optimizer: Optimizer) -> None:
+        '''
+            Compiles (Initializes) the model with the given error function (error_func)
+            and optimizer.\n
+            error_func -> The error function the network minimizes.\n
+            optimizer -> The optimizer used in the gradient descent process.
+        '''
+        for layer in self.layers:
+            layer.compile()
+        self.error_func = error_func
+        self.optimizer = optimizer
+        self.optimizer.compile([layer.get_num_params() for layer in self.layers])
 
-	def predict(self, X):
-		return np.array([self._predict(x) for x in X], dtype=np.float32)
+    def _predict(self, x, save_vals=True) -> np.ndarray:
+        '''
+            Returns the prediction of the network on the input vector x.\n
+            save_vals -> whether the values of the neurons of each layer are saved or not.
+        '''
+        for layer in self.layers:
+            x = layer.forward(x, save_vals=save_vals)
+        return x
 
-	def __call__(self, X):
-		return self.predict(X)
+    def predict(self, X) -> np.ndarray:
+        '''
+            Returns an array where at the i-th index is the prediction of the
+            network for the input vector X[i].
+        '''
+        return np.array([self._predict(x, save_vals=False) for x in X])
 
-	# returns the value of the error function
-	def evaluate(self, X, Y):
-		if not isinstance(Y, np.ndarray):
-			Y = np.array(Y)
-		predictions = self.predict(X)
-		return self.error_func(Y, predictions)
+    def fit_stochastic(self, X, Y, epochs=5, verbose=True, return_errors=False):
+        '''
+            Trains the network on the inputs X and outputs Y for the given number of epochs.\n
+            verbose -> Whether or not to print the loss after each epoch.\n
+            return_errors -> Whether or not to return a list with the values of the loss function
+            at each epoch.
+        '''
+        if not isinstance(Y, np.ndarray):
+            Y = np.array(Y, dtype=np.float32)
 
-	def fit_stochastic(self, inputs, labels, epochs=75, verbose=True, return_errors=False):
-		if return_errors:
-			vals = []
+        if return_errors:
+            errs = []
 
-		for epoch in range(1, epochs+1):
-			if verbose or return_errors:
-				H = 0
+        for epoch in range(epochs):
+            for u in range(len(Y)):
+                pred = self._predict(X[u])
 
-			if not isinstance(labels, np.ndarray):
-				labels = np.array(labels)
+                errors = self.error_func.grad(Y[u], pred)
+                if self.layers[-1].activation.__name__ == 'softmax':
+                    out_matrix = np.vstack([pred]*len(pred))
+                    Z = out_matrix*out_matrix.T-out_matrix*np.eye(len(pred))
+                    errors = -np.dot(Z, errors)
 
-			for u in range(len(inputs)):
-				X, Y = inputs[u], labels[u]
-				predicted = self._predict(X)
+                for l_idx in range(self.num_layers-1, -1, -1):
+                    gradients = self.layers[l_idx].get_gradients(errors)
+                    updates = self.optimizer.step(gradients, layer=l_idx)
+                    errors = self.layers[l_idx].backward(errors) 
+                    self.layers[l_idx].update_params(updates)
+    
+            if verbose or return_errors:
+                predictions = self.predict(X)
+                err = self.error_func(Y, predictions)
+                if verbose:
+                    print(f"Epoch #{epoch+1}, loss: {err}")
+                if return_errors:
+                    errs.append(err)
+        
+        return None if not return_errors else errs
 
-				if verbose or return_errors:
-					H += self.error_func(Y, predicted)
+    def fit(self, X, Y, epochs=5, batch_size=32, verbosity=1, return_errors=0):
+        '''
+            Trains the network on the inputs X and outputs Y for the given number of epochs and
+            with the given batch size.\n
+            verbosity -> How much of the training process is printed on the console\n
+            \tverbosity = 0 -> Nothing is printed\n
+            \tverbosity = 1 -> The loss is printed at each epoch\n
+            \tverbosity = 2 -> The loss is printed at each epoch and at each batch\n
+            returns_errors -> How frequently the errors are saved and returned during the training process.\n
+            \treturn_errors = 0 -> The errors are not logged or returned.\n
+            \treturn_errors = 1 -> The errors are logged for every epoch.\n
+            \treturn_errors = 2 -> The errors are logged for every batch.\n
+            All of the errors are subsequently returned by the function in a list
+        '''
+        if not isinstance(Y, np.ndarray):
+            Y = np.array(Y, dtype=np.float32)
 
-				if self.layers[-1].g.__name__ != 'softmax':
-					B_L = self.layers[-2].get_local_fields(self.layers[-1].thresholds)
-					errors_L = self.error_func.grad(Y, predicted)*self.layers[-1].g(B_L, deriv=True)
-				else:
-					# calculate softmax gradient
-					out_matrix = np.vstack([predicted]*len(predicted))
-					Z = out_matrix*out_matrix.T-out_matrix*np.eye(len(predicted))
-					errors_L = -np.dot(Z, self.error_func.grad(Y, predicted))
-					
-				errors = [errors_L]
+        n_batches = int(np.ceil(len(Y)/batch_size))
 
-				for l in range(self.L-1, 1, -1):
-					B_l = self.layers[l-2].get_local_fields(self.layers[l-1].thresholds)
-					g_prime = self.layers[l-1].g(B_l, deriv=True)
+        epoch_loss_print, batch_loss_print = verbosity >= 1, verbosity >= 2
 
-					error_l = self.layers[l-1].back_transform(errors[-1])
-					errors.append(error_l*g_prime)
+        if return_errors != 0:
+            errs = []
 
-				for l in range(1, self.L):
-					weights_grads = np.zeros(self.layers[l-1].weights.shape)
-					thresholds_grads = errors[-l]
-					for j in range(self.layers[l].N):
-						for i in range(self.layers[l-1].N):
-							weights_grads[j][i] = errors[-l][j]*self.layers[l-1].neurons[i]
-					
-					gradients = np.append(weights_grads, thresholds_grads)
-					updates = self.optimizer.step(gradients, layer=l-1, epoch=epoch)
-					self.layers[l-1].weights += np.reshape(updates[:-self.layers[l].N], (self.layers[l].N, self.layers[l-1].N))
-					self.layers[l].thresholds += updates[-self.layers[l].N:]
+        for epoch in range(epochs):
+            for batch in range(n_batches):
+                batch_start = batch*batch_size
+                batch_end = min((batch+1)*batch_size, len(Y))
 
-			if verbose:
-				print("Error on epoch #{epoch}: {H}".format(epoch=epoch, H=H))
-			if return_errors:
-				vals.append(H)
-		if return_errors:
-			return vals
+                batch_updates = [np.zeros(layer.get_num_params()) for layer in self.layers]
 
-	def fit(self, inputs, labels, epochs=75, batches=True, batch_size=32, verbose=True, return_errors=False):
-		if return_errors:
-			vals = []
+                if batch_loss_print or return_errors == 2:
+                    avg_batch_loss = 0
 
-		if not batches or batch_size == 1:
-			return self.fit_stochastic(inputs, labels, epochs, verbose, return_errors)
+                for u in range(batch_start, batch_end):
+                    pred = self._predict(X[u])
 
-		if not isinstance(labels, np.ndarray):
-			labels = np.array(labels)
+                    if batch_loss_print:
+                        avg_batch_loss += self.error_func(Y[u], pred)
 
-		for epoch in range(1, epochs+1):
+                    errors = self.error_func.grad(Y[u], pred)
+                    if self.layers[-1].activation.__name__ == 'softmax':
+                        out_matrix = np.vstack([pred]*len(pred))
+                        Z = out_matrix*out_matrix.T-out_matrix*np.eye(len(pred))
+                        errors = -np.dot(Z, errors)
 
-			if verbose or return_errors:
-				H = 0
+                    for l_idx in range(self.num_layers-1, -1, -1):
+                        gradients = self.layers[l_idx].get_gradients(errors)
+                        updates = self.optimizer.step(gradients, layer=l_idx)
+                        errors = self.layers[l_idx].backward(errors)
+                        batch_updates[l_idx] += updates
+                
+                for l_idx in range(self.num_layers):
+                    self.layers[l_idx].update_params(batch_updates[l_idx]/batch_size)
 
-			for batch in range(int(np.ceil(len(labels)/batch_size))):
-				updates = [np.zeros(shape=(self.layers[i].N*(self.layers[i-1].N+1),)) for i in range(1,self.L)]
-				for u in range(batch*batch_size, min((batch+1)*batch_size, len(inputs))):
-					X, Y = inputs[u], labels[u]
-					predicted = self._predict(X)
-					
-					if verbose or return_errors:
-						H += self.error_func(Y, predicted)
+                if batch_loss_print:
+                    print(f"\tBatch {batch+1}/{n_batches}, loss = {avg_batch_loss/batch_size}")
+                if return_errors == 2:
+                    errs.append(avg_batch_loss/batch_size)
 
-					if self.layers[-1].g.__name__ != 'softmax':
-						B_L = self.layers[-2].get_local_fields(self.layers[-1].thresholds)
-						errors_L = self.error_func.grad(Y, predicted)*self.layers[-1].g(B_L, deriv=True)
-					else:
-						# calculate softmax gradient
-						out_matrix = np.vstack([predicted]*len(predicted))
-						Z = out_matrix*out_matrix.T-out_matrix*np.eye(len(predicted))
-						errors_L = -np.dot(Z, self.error_func.grad(Y, predicted))
-						
-					errors = [errors_L]
+            if epoch_loss_print or return_errors == 1:
+                predictions = self.predict(X)
+                err = self.error_func(Y, predictions)
+                if return_errors == 1:
+                    errs.append(err)
+                if epoch_loss_print:
+                    print(f"Epoch {epoch+1}/{epochs}, loss: {err}")
 
-					for l in range(self.L-1, 1, -1):
-						B_l = self.layers[l-2].get_local_fields(self.layers[l-1].thresholds)
-						g_prime = self.layers[l-1].g(B_l, deriv=True)
+        return None if return_errors == 0 else errs
 
-						error_l = self.layers[l-1].back_transform(errors[-1])
-						errors.append(error_l*g_prime)
+    def save(self, filename: str, copts=4, absolute=False, save_state=False) -> None:
+        '''
+            Saves the model and all of its parameters in the file with name "filename.h5" in the current
+            working directory.\n
+            filename -> The name of the file the model will be saved in.\n
+            copts -> The amount of compression applied from 0 (lowest) to 9 (highest).\n
+            absolute -> Whether the path passed in filename is absolute or relative (under the current 
+            working directory).\n
+            save_state -> Whether the values of the neurons in the layers of the network are also saved or not.
+        '''
+        path = os.path.join(os.getcwd(), filename) if not absolute else filename
+        file = h5py.File(path+'.h5', 'w')
+        for i in range(self.num_layers):
+            self.layers[i].save(file, i, save_state=save_state, copts=4)
+        name_ASCII = [ord(x) for x in self.name]
+        file.create_dataset('name', (len(self.name)), np.ubyte, name_ASCII, compression="gzip", compression_opts=copts)
+        self.optimizer.save(file)
+        file.close()
 
-					for l in range(1, self.L):
-						weights_grads = np.zeros(self.layers[l-1].weights.shape)
-						thresholds_grads = errors[-l]
-						for j in range(self.layers[l].N):
-							for i in range(self.layers[l-1].N):
-								weights_grads[j][i] = errors[-l][j]*self.layers[l-1].neurons[i]
-						
-						gradients = np.append(weights_grads, thresholds_grads)
-						updates[l-1] += self.optimizer.step(gradients, layer=l-1, epoch=epoch)
-					
-				for l in range(1, self.L):
-					# maybe divide by batch_size, maybe not... (its up to preference really)
-					self.layers[l-1].weights += np.reshape(updates[l-1][:-self.layers[l].N], (self.layers[l].N, self.layers[l-1].N))/batch_size
-					self.layers[l].thresholds += updates[l-1][-self.layers[l].N:]/batch_size
+    def load(self, filename: str, absolute=False) -> None:
+        '''
+            Loads the model from the file with name "filename.h5" under the current working directory.\n
+            filename -> The name of the file in which the model is saved.\n
+            absolute -> Whether filename is an absolute path to the file or not.
+        '''
+        path = os.path.join(os.getcwd(), filename) if not absolute else filename
+        file = h5py.File(path+'.h5', 'r')
+        self.name = ''.join([chr(x) for x in file['name']])
+        layers = []
+        curr_layer = 0
+        while f'layer_{curr_layer}' in file.keys():			
+            layers.append(Layer.load_layer(file, curr_layer))
+            curr_layer += 1
+        self.num_layers = len(layers)
+        self.layers = layers
+        self.optimizer = Optimizer.load_optimizer(file)
+        file.close()
 
-			if verbose:
-				print("Error on epoch #{epoch}: {H}".format(epoch=epoch, H=H))
-			if return_errors:
-				vals.append(H)
-		if return_errors:
-			return vals	
+    def __str__(self):
+        res = f"Sequential Model: name: {self.name}, number of layers: {self.num_layers}\n"
+        res += "-"*40+"\n"
+        trainable_params = 0
+        for i in range(self.num_layers):
+            res += str(self.layers[i])
+            trainable_params += self.layers[i].get_num_trainable_params()
+        res += f"Trainable params: {trainable_params}\n"
+        res += str(self.optimizer)
+        return res
 
-	def __str__(self):
-		res = f"Sequential Model: name: {self.name}, layers: {self.L}\n"
-		trainable_params = 0
-		for i in range(self.L):
-			res += str(self.layers[i])
-			trainable_params += self.layers[i].get_trainable_params()
-		res += f"Trainable parameters: {trainable_params-len(self.layers[0].thresholds)}"
-		return res
-
-	def __getitem__(self, index):
-		return self.layers[index]
-
-	def save(self, filename, absolute=False):
-		path = filename if absolute else os.path.join(os.getcwd(), filename)
-		file = h5py.File(path + '.h5', 'w')
-		for i in range(self.L):
-			self.layers[i].save(file, i)
-
-		name = np.array([ord(x) for x in self.name], dtype=np.ubyte)
-		file.create_dataset('name', name.shape, np.ubyte, name, compression='gzip')
-		self.optimizer.save(file)
-		file.close()
-
-	def load(self, filename, absolute=False):
-		path = filename if absolute else os.path.join(os.getcwd(), filename)
-		file = h5py.File(path+'.h5', 'r')
-		self.name = ''.join([chr(x) for x in file['name']])
-		layers = []
-		curr_layer = 0
-		while f'layer_{curr_layer}' in file.keys():
-			layer_type = file[f'layer_{curr_layer}']['type'][0]			
-			layer = get_basic_layer_instance(layer_type)
-			layer.load(file, curr_layer)
-			layers.append(layer)
-			curr_layer += 1
-		self.L = len(layers)
-		self.layers = layers
-		optimizer_type = file['optimizer']['type'][0]
-		self.optimizer = get_basic_optimizer_instance(optimizer_type)
-		self.optimizer.load(file)
-		file.close()
+    def __getitem__(self, index) -> Layer:
+        return self.layers[index]

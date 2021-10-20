@@ -21,6 +21,7 @@ class Optimizer:
 		self.decay = decay
 		self.exp_decay = exp_decay
 
+	# the argument passed will be a one dimensional array with the number of parameters for each layer
 	def compile(self, *args):
 		pass
 		
@@ -40,7 +41,7 @@ class Optimizer:
 		group = file.create_group('optimizer')
 		name = np.array([ord(x) for x in self.name])
 		group.create_dataset('name', name.shape, np.ubyte, name, compression='gzip')
-		group.create_dataset('lr', (1,), np.float32, [self.lr, self.decay, int(self.exp_decay)], compression='gzip')
+		group.create_dataset('lr', (3,), np.float32, [self.lr, self.decay, int(self.exp_decay)], compression='gzip')
 		group.create_dataset('type', (1,), np.ubyte, [self._type], compression='gzip')
 
 	def load(self, file):
@@ -50,9 +51,21 @@ class Optimizer:
 		self.exp_decay = bool(self.exp_decay) # convert binary -> bool
 		self._type = group['type'][0]
 
+	@staticmethod
+	def load_optimizer(file):
+		_type = file['optimizer']['type'][0]
+		optim = get_basic_optimizer_instance(_type)
+		optim.load(file)
+		return optim
+
+	def __str__(self) -> str:
+		decay_str = "exponential" if self.exp_decay else "kt"
+		res = f'Optimizer: \n\tname: {self.name}\n\ttype: {type(self).__name__}\n\tlearning rate: {self.lr:.5f}'
+		return res + (f"\n\tdecay: {self.decay:.5f}\n\tdecay type: {decay_str}" if self.decay != 0 else "")
+
 class SGD(Optimizer):
 
-	def __init__(self, lr=0.001, decay=0, exp_decay=False):
+	def __init__(self, lr=0.001, decay=0, exp_decay=True):
 		super().__init__('Standard Gradient Descent', lr, 1, decay, exp_decay)
 
 	def step(self, grads, **kwargs):
@@ -61,13 +74,13 @@ class SGD(Optimizer):
 
 class Momentum(Optimizer):
 
-	def __init__(self, lr=0.001, momentum=0.1, decay=0, exp_decay=False):
+	def __init__(self, lr=0.001, momentum=0.1, decay=0, exp_decay=True):
 		super().__init__('Momentum', lr, 2, decay, exp_decay)
 		self.v_prev = None
 		self.momentum = momentum
 
-	def compile(self, struct):
-		self.v_prev = [np.zeros(shape=(struct[l+1]*(struct[l]+1))) for l in range(len(struct)-1)]
+	def compile(self, params):
+		self.v_prev = [np.zeros(layer_params) for layer_params in params]
 
 	def step(self, grads, **kwargs):
 		lr = super().step(kwargs)
@@ -75,9 +88,6 @@ class Momentum(Optimizer):
 		v_t = self.momentum*self.v_prev[layer]+lr*grads
 		self.v_prev[layer] = v_t
 		return -v_t
-
-	def __str__(self):
-		return f"[Optimizer]\nName={self.name}, learning rate: {self.lr}, momentum: {self.momentum}\n"
 
 	def save(self, file):
 		super().save(file)
@@ -97,15 +107,17 @@ class Momentum(Optimizer):
 			curr_layer += 1
 		self.running_mean = running_mean
 
+	def __str__(self) -> str:
+		return super().__str__()+f"\n\tmomentum: {self.momentum:.5f}"
+
 class Adagrad(Optimizer):
 
-	def __init__(self, lr=0.2, initial_mean=1.0, decay=0, exp_decay=False):
+	def __init__(self, lr=0.2, decay=0, exp_decay=True):
 		super().__init__('Adagrad', lr, 3, decay, exp_decay)
 		self.running_mean = None
-		self.initial_mean = initial_mean
 
-	def compile(self, struct):
-		self.running_mean = [np.zeros(shape=(struct[l+1]*(struct[l]+1)))*self.initial_mean for l in range(len(struct)-1)]
+	def compile(self, num_params):
+		self.running_mean = [np.zeros(layer_params) for layer_params in num_params]
 
 	def step(self, grads, **kwargs):
 		lr = super().step(kwargs)
@@ -132,14 +144,14 @@ class Adagrad(Optimizer):
 
 class Adadelta(Optimizer):
 
-	def __init__(self, lr=0.001, gamma=0.99, initial_mean=1, decay=0, exp_decay=False):
+	def __init__(self, lr=0.001, gamma=0.99, initial_mean=1, decay=0, exp_decay=True):
 		super().__init__('Adadelta', lr, 4, decay, exp_decay)
 		self.gamma = gamma
 		self.running_mean = None
 		self.initial_mean = initial_mean
 
-	def compile(self, struct):
-		self.running_mean = [np.zeros(shape=(struct[l+1]*(struct[l]+1)))*self.initial_mean for l in range(len(struct)-1)]
+	def compile(self, num_params):
+		self.running_mean = [np.zeros(layer_params) for layer_params in num_params]
 
 	def step(self, grads, **kwargs):
 		lr = super().step(kwargs)
@@ -147,9 +159,6 @@ class Adadelta(Optimizer):
 		self.running_mean[layer] = self.gamma*self.running_mean[layer] + (1-self.gamma)*(grads**2)
 		res = -lr*grads/np.sqrt(self.running_mean[layer]+1e-8)
 		return res
-
-	def __str__(self):
-		return f"[Optimizer]\nName={self.name}, learning rate: {self.lr}, gamma={self.gamma}\n"
 
 	def save(self, file):
 		super().save(file)
@@ -169,16 +178,21 @@ class Adadelta(Optimizer):
 			curr_layer += 1
 		self.running_mean = running_mean
 
+	def __str__(self) -> str:
+		return super().__str__() + f"\n\tgamma: {self.gamma:.5f}"
+
+# TODO: implement RMSProp
+
 class Adam(Optimizer):
 
-	def __init__(self, lr=0.005, beta=0.9, gamma=0.999, decay=0, exp_decay=False):
+	def __init__(self, lr=0.005, beta=0.9, gamma=0.999, decay=0, exp_decay=True):
 		super().__init__('Adam', lr, 5, decay, exp_decay)
 		self.beta = beta
 		self.gamma = gamma
 
-	def compile(self, struct):
-		self.m = [np.zeros(shape=(struct[l+1]*(struct[l]+1))) for l in range(len(struct)-1)]
-		self.v = [np.zeros(shape=(struct[l+1]*(struct[l]+1))) for l in range(len(struct)-1)]
+	def compile(self, num_params):
+		self.m = [np.zeros(layer_params) for layer_params in num_params]
+		self.v = [np.zeros(layer_params) for layer_params in num_params]
 
 	def step(self, grads, **kwargs):
 		lr = super().step(kwargs)
@@ -190,16 +204,13 @@ class Adam(Optimizer):
 		adj_lr = lr*np.sqrt(1-self.gamma**epoch)/(1-self.beta**epoch) # adjusted learning rate
 		return -adj_lr*self.m[layer]/(np.sqrt(self.v[layer]+1e-8))
 
-	def __str__(self):
-		return f"[Optimizer]\nName={self.name}, learning rate: {self.lr}, beta_1={self.beta}, beta_2={self.gamma}\n"
-
 	def save(self, file):
 		super().save(file)
 		group = file['optimizer']
-		group.create_dataset('params', (2,). np.float32, [self.beta, self.gamma], compression='gzip')
+		group.create_dataset('params', (2,), np.float32, [self.beta, self.gamma], compression='gzip')
 		for layer_idx in range(len(self.m)):
 			group.create_dataset(f'layer_{layer_idx}_first_momentum', self.m[layer_idx].shape, np.float32, self.m[layer_idx], compression="gzip")
-			group.create_dataset(f'layer_{layer_idx}_second_momentum', self.v[layer_idx], np.float32, self.v[layer_idx], compression="gzip")
+			group.create_dataset(f'layer_{layer_idx}_second_momentum', self.v[layer_idx].shape, np.float32, self.v[layer_idx], compression="gzip")
 
 	def load(self, file):
 		super().load(file)
@@ -208,7 +219,10 @@ class Adam(Optimizer):
 		m, v = [], []
 		curr_layer = 0
 		while f'layer_{curr_layer}_first_momentum' in group.keys():
-			m.append(np.array(file[f'layer_{curr_layer}_first_momentum'], dtype=np.float32))
-			v.append(np.array(file[f'layer_{curr_layer}_second_momentum'], dtype=np.float32))
+			m.append(np.array(group[f'layer_{curr_layer}_first_momentum'], dtype=np.float32))
+			v.append(np.array(group[f'layer_{curr_layer}_second_momentum'], dtype=np.float32))
 			curr_layer += 1
 		self.m, self.v = m, v
+
+	def __str__(self) -> str:
+		return super().__str__() + f"\n\tbeta: {self.beta:.5f}\n\tgamma: {self.gamma:.5f}"
