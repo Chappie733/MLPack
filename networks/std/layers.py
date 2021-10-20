@@ -1,6 +1,4 @@
-from typing import ForwardRef
 import numpy as np
-from numpy.core.getlimits import _register_known_types
 from networks.activations import ACTIVATIONS
 from h5py import File
 
