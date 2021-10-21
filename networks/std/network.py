@@ -171,7 +171,7 @@ class Model():
             self.layers[i].save(file, i, save_state=save_state, copts=4)
         name_ASCII = [ord(x) for x in self.name]
         file.create_dataset('name', (len(self.name)), np.ubyte, name_ASCII, compression="gzip", compression_opts=copts)
-        self.optimizer.save(file)
+        self.optimizer.save(file, copts)
         file.close()
 
     def load(self, filename: str, absolute=False) -> None:
