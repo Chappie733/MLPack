@@ -1,5 +1,6 @@
 import numpy as np
 
+
 # returns a basic instace (with the default parameters) of the optimizer given its type
 def get_basic_optimizer_instance(optim_type):
 	if optim_type == 1:
@@ -9,6 +10,8 @@ def get_basic_optimizer_instance(optim_type):
 	if optim_type == 3:
 		return Adagrad()
 	if optim_type == 4:
+		return RMSProp()
+	if optim_type == 5:
 		return Adadelta()
 	return Adam()
 
@@ -37,12 +40,12 @@ class Optimizer:
 	def __call__(self, grads, **kwargs):
 		return self.step(grads)
 
-	def save(self, file):
+	def save(self, file, copts=4):
 		group = file.create_group('optimizer')
 		name = np.array([ord(x) for x in self.name])
-		group.create_dataset('name', name.shape, np.ubyte, name, compression='gzip')
-		group.create_dataset('lr', (3,), np.float32, [self.lr, self.decay, int(self.exp_decay)], compression='gzip')
-		group.create_dataset('type', (1,), np.ubyte, [self._type], compression='gzip')
+		group.create_dataset('name', name.shape, np.ubyte, name, compression='gzip', compression_opts=copts)
+		group.create_dataset('lr', (3,), np.float32, [self.lr, self.decay, int(self.exp_decay)], compression='gzip', compression_opts=copts)
+		group.create_dataset('type', (1,), np.ubyte, [self._type], compression='gzip', compression_opts=copts)
 
 	def load(self, file):
 		group = file['optimizer']
@@ -89,12 +92,12 @@ class Momentum(Optimizer):
 		self.v_prev[layer] = v_t
 		return -v_t
 
-	def save(self, file):
-		super().save(file)
+	def save(self, file, copts=4):
+		super().save(file, copts)
 		group = file['optimizer']
-		group.create_dataset('params', (1,), np.float32, [self.momentum], compression='gzip')
+		group.create_dataset('params', (1,), np.float32, [self.momentum], compression='gzip', compression_opts=copts)
 		for layer_idx, layer_mean in enumerate(self.v_prev):
-			group.create_dataset(f'layer_{layer_idx}_mean', layer_mean.shape, np.float32, layer_mean, compression="gzip")
+			group.create_dataset(f'layer_{layer_idx}_mean', layer_mean.shape, np.float32, layer_mean, compression="gzip", compression_opts=copts)
 
 	def load(self, file):
 		super().load(file)
@@ -126,11 +129,11 @@ class Adagrad(Optimizer):
 		res = -lr*grads/np.sqrt(self.running_mean[layer]+1e-8)
 		return res
 
-	def save(self, file):
-		super().save(file)
+	def save(self, file, copts=4):
+		super().save(file, copts)
 		group = file['optimizer']
 		for layer_idx, layer_mean in enumerate(self.running_mean):
-			group.create_dataset(f'layer_{layer_idx}_mean', layer_mean.shape, np.float32, layer_mean, compression="gzip")
+			group.create_dataset(f'layer_{layer_idx}_mean', layer_mean.shape, np.float32, layer_mean, compression="gzip", compression_opts=copts)
 		
 	def load(self, file):
 		super().load(file)
@@ -142,10 +145,10 @@ class Adagrad(Optimizer):
 			curr_layer += 1
 		self.running_mean = running_mean
 
-class Adadelta(Optimizer):
+class RMSProp(Optimizer):
 
 	def __init__(self, lr=0.001, gamma=0.99, initial_mean=1, decay=0, exp_decay=True):
-		super().__init__('Adadelta', lr, 4, decay, exp_decay)
+		super().__init__('RMSProp', lr, 4, decay, exp_decay)
 		self.gamma = gamma
 		self.running_mean = None
 		self.initial_mean = initial_mean
@@ -160,12 +163,12 @@ class Adadelta(Optimizer):
 		res = -lr*grads/np.sqrt(self.running_mean[layer]+1e-8)
 		return res
 
-	def save(self, file):
-		super().save(file)
+	def save(self, file, copts=4):
+		super().save(file, copts)
 		group = file['optimizer']
-		group.create_dataset('params', (1,), np.float64, [self.gamma], compression="gzip")
+		group.create_dataset('params', (1,), np.float32, [self.gamma], compression="gzip", compression_opts=copts)
 		for layer_idx, layer_mean in enumerate(self.running_mean):
-			group.create_dataset(f'layer_{layer_idx}_mean', layer_mean.shape, np.float32, layer_mean, compression="gzip")
+			group.create_dataset(f'layer_{layer_idx}_mean', layer_mean.shape, np.float32, layer_mean, compression="gzip", compression_opts=copts)
 
 	def load(self, file):
 		super().load(file)
@@ -181,12 +184,52 @@ class Adadelta(Optimizer):
 	def __str__(self) -> str:
 		return super().__str__() + f"\n\tgamma: {self.gamma:.5f}"
 
-# TODO: implement RMSProp
+class Adadelta(Optimizer):
+
+	def __init__(self, eps=1e-5, beta=0.99, decay=0, exp_decay=True, **kwargs):
+		super().__init__('Adadelta', 0, 5, decay, exp_decay)
+		self.beta = beta
+		self.eps = eps
+
+	def compile(self, num_params):
+		self.running_mean = [np.zeros(layer_params) for layer_params in num_params]
+		self.updates_running_mean = [np.zeros(layer_params) for layer_params in num_params]
+
+	def step(self, grads, **kwargs):
+		layer = 0 if 'layer' not in kwargs else kwargs['layer']
+		self.running_mean[layer] = self.beta*self.running_mean[layer] + (1-self.beta)*(grads**2)
+		res = -grads*np.sqrt(self.updates_running_mean[layer]+self.eps)/np.sqrt(self.running_mean[layer]+self.eps)
+		self.updates_running_mean[layer] = self.beta*self.updates_running_mean[layer] + (1-self.beta)*(res**2)
+		return res
+
+	def save(self, file, copts=4):
+		super().save(file, copts)
+		group = file['optimizer']
+		group.create_dataset('params', (2,), np.float64, [self.beta, self.eps], compression="gzip", compression_opts=copts)
+		for layer_idx, layer_mean in enumerate(self.running_mean):
+			updates_mean = self.updates_running_mean[layer_idx]
+			group.create_dataset(f'layer_{layer_idx}_mean', layer_mean.shape, np.float32, layer_mean, compression="gzip", compression_opts=copts)
+			group.create_dataset(f'layer_{layer_idx}_updates_mean', updates_mean.shape, np.float32, updates_mean, compression="gzip", compression_opts=copts)
+	
+	def load(self, file):
+		super().load(file)
+		group = file['optimizer']
+		self.beta, self.eps = group['params']
+		running_mean, updates_running_mean = [], []
+		curr_layer = 0
+		while f"layer_{curr_layer}_mean" in group.keys():
+			running_mean.append(np.array(group[f"layer_{curr_layer}_mean"], dtype=np.float32))
+			updates_running_mean.append(np.array(group[f"layer_{curr_layer}_updates_mean"], dtype=np.float32))
+			curr_layer += 1
+		self.running_mean, self.updates_running_mean = running_mean, updates_running_mean
+
+	def __str__(self) -> str:
+		return super().__str__() + f"\n\tgamma: {self.beta:.5f}"
 
 class Adam(Optimizer):
 
-	def __init__(self, lr=0.005, beta=0.9, gamma=0.999, decay=0, exp_decay=True):
-		super().__init__('Adam', lr, 5, decay, exp_decay)
+	def __init__(self, lr=0.1, beta=0.9, gamma=0.999, decay=0, exp_decay=True):
+		super().__init__('Adam', lr, 6, decay, exp_decay)
 		self.beta = beta
 		self.gamma = gamma
 
@@ -204,13 +247,15 @@ class Adam(Optimizer):
 		adj_lr = lr*np.sqrt(1-self.gamma**epoch)/(1-self.beta**epoch) # adjusted learning rate
 		return -adj_lr*self.m[layer]/(np.sqrt(self.v[layer]+1e-8))
 
-	def save(self, file):
-		super().save(file)
+	def save(self, file, copts=4):
+		super().save(file, copts)
 		group = file['optimizer']
 		group.create_dataset('params', (2,), np.float32, [self.beta, self.gamma], compression='gzip')
 		for layer_idx in range(len(self.m)):
-			group.create_dataset(f'layer_{layer_idx}_first_momentum', self.m[layer_idx].shape, np.float32, self.m[layer_idx], compression="gzip")
-			group.create_dataset(f'layer_{layer_idx}_second_momentum', self.v[layer_idx].shape, np.float32, self.v[layer_idx], compression="gzip")
+			group.create_dataset(f'layer_{layer_idx}_first_momentum', self.m[layer_idx].shape, 
+								np.float32, self.m[layer_idx], compression="gzip", compression_opts=copts)
+			group.create_dataset(f'layer_{layer_idx}_second_momentum', self.v[layer_idx].shape, 
+								np.float32, self.v[layer_idx], compression="gzip", compression_opts=copts)
 
 	def load(self, file):
 		super().load(file)
